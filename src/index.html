@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0f1e">
+<title>ESC Manager v9.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/main.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="offlineBanner">📡 오프라인 모드 — 인터넷 연결을 확인하세요</div>
+<div id="loginScreen">
+  <div class="login-logo">ESC</div>
+  <div class="login-card">
+    <div style="text-align:center">
+      <div class="login-title">ESC Manager</div>
+      <div class="login-sub" style="margin-top:4px">v9.0 — 세라믹 정전척 생산관리</div>
+    </div>
+    <button class="btn-google" onclick="doLogin()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z"/></svg>
+      Google로 로그인
+    </button>
+    <div id="loginSpinner" class="spinner"></div>
+    <div id="loginError" style="font-size:12px;color:var(--err);display:none"></div>
+  </div>
+</div>
+<div id="toastContainer"></div>
+<div id="ganttTooltip" class="gantt-tooltip" style="display:none"></div>
+<div id="app">
+  <nav id="sidebar">
+    <div class="sb-top">
+      <div class="sb-logo">ESC</div>
+      <span class="sb-brand">ESC Manager</span>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-section">MAIN</div>
+      <div class="sb-item active" data-tab="home" onclick="switchTab('home')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="sb-item-label">홈</span>
+      </div>
+      <div class="sb-item" data-tab="workspace" onclick="switchTab('workspace')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        <span class="sb-item-label">워크스페이스</span>
+      </div>
+      <div class="sb-item" data-tab="calendar" onclick="switchTab('calendar')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span class="sb-item-label">캘린더</span>
+      </div>
+      <div class="sb-section">TOOLS</div>
+      <div class="sb-item" data-tab="gantt" onclick="switchTab('gantt')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+        <span class="sb-item-label">간트차트</span>
+      </div>
+      <div class="sb-item" data-tab="analysis" onclick="switchTab('analysis')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span class="sb-item-label">분석</span>
+      </div>
+      <div class="sb-item" data-tab="ai" onclick="switchTab('ai')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <span class="sb-item-label">AI 어시스턴트</span>
+      </div>
+      <div class="sb-section">SYS</div>
+      <div class="sb-item" data-tab="settings" onclick="switchTab('settings')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span class="sb-item-label">설정</span>
+      </div>
+    </div>
+    <div class="sb-bottom">
+      <div class="user-avatar" id="sbAvatar"></div>
+      <div class="user-info">
+        <div class="user-name" id="sbName">-</div>
+        <div class="user-email" id="sbEmail">-</div>
+      </div>
+    </div>
+  </nav>
+  <div id="main">
+    <div id="topbar">
+      <button id="sidebarToggleBtn" onclick="toggleSidebar()" style="background:none;border:none;color:var(--t1);font-size:20px;cursor:pointer;padding:4px 8px;margin-right:8px;line-height:1;">☰</button>
+      <div class="tb-icon" id="tbIcon"></div>
+      <div class="tb-title" id="tbTitle">홈</div>
+      <button class="tb-btn" onclick="refreshData()" title="새로고침"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
+      <button class="tb-btn" onclick="toggleTheme()" title="테마전환"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
+      <div class="user-avatar" id="tbAvatar" style="width:32px;height:32px;font-size:12px;cursor:pointer" onclick="switchTab('settings')"></div>
+    </div>
+    <div id="content">
+      <div id="homeTab" class="tab-content">
+        <div id="greetCard" class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(129,140,248,0.08));border-color:rgba(99,102,241,0.3)">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="font-size:20px;font-weight:700" id="greetMsg">안녕하세요!</div>
+              <div style="font-size:13px;color:var(--t2);margin-top:4px" id="greetSub">현재 생산 현황을 확인하세요</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="openReportModal()">📊 리포트</button>
+              <button class="btn btn-secondary btn-sm" onclick="openDeadlineCalc()">📅 납기역산</button>
+              <button class="btn btn-secondary btn-sm" onclick="openWidgetSettings()">⚙️ 위젯설정</button>
+            </div>
+          </div>
+        </div>
+        <div id="delayAlertCard" class="card" style="display:none;margin-bottom:16px;border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.07)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">⚠️</span>
+            <div><div style="font-weight:600;color:var(--err)">지연 경보</div><div style="font-size:13px;color:var(--t2)" id="delayAlertMsg"></div></div>
+          </div>
+        </div>
+        <div id="widgetContainer"></div>
+      </div>
+      <div id="workspaceTab" class="tab-content" style="display:flex;flex-direction:column;height:100%;">
+        <div class="ws-toolbar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ 제품등록</button>
+          <button class="btn btn-primary btn-sm" onclick="openSNModal()">+ S/N생성</button>
+          <button class="btn btn-secondary btn-sm" onclick="openDeadlineCalc()">📅 납기역산</button>
+          <button class="btn btn-secondary btn-sm" onclick="openIssueModal()">🚨 이슈등록</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 엑셀</button>
+          <div class="search-wrap" style="margin-left:auto;display:flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="form-input search-input" id="wsSearch" placeholder="검색..." oninput="renderWorkspace()" style="width:160px"></div>
+          <span class="search-count" id="wsSearchCount"></span>
+          <button class="btn btn-secondary btn-sm" id="expandAllBtn" onclick="toggleAllGroups()">모두 펼치기</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <div class="tab-btns" style="margin-bottom:0">
+            <button class="tab-btn active" id="wsViewProduct" onclick="setWsView('product',this)">제품별</button>
+            <button class="tab-btn" id="wsViewBatch" onclick="setWsView('batch',this)">배치별</button>
+          </div>
+          <div class="filter-chips" id="filterChips" style="margin-bottom:0;margin-left:8px">
+            <div class="chip active" data-f="전체" onclick="toggleFilter('전체')">전체</div>
+            <div class="chip" data-f="대기" onclick="toggleFilter('대기')">대기</div>
+            <div class="chip" data-f="진행" onclick="toggleFilter('진행')">진행</div>
+            <div class="chip" data-f="완료" onclick="toggleFilter('완료')">완료</div>
+            <div class="chip" data-f="지연" onclick="toggleFilter('지연')">지연</div>
+            <div class="chip" data-f="폐기" onclick="toggleFilter('폐기')">폐기</div>
+          </div>
+        </div>
+        <div id="wsScrollContainer" style="flex:1;overflow-y:auto;position:relative">
+          <div class="table-wrap" id="wsTable"></div>
+          <div id="batchBar">
+            <span id="batchCount" style="font-size:13px;font-weight:600;color:var(--ac2)"></span>
+            <select class="form-input form-select" id="batchStatusSel" style="width:120px;padding:5px 10px"><option value="">상태 선택</option><option>대기</option><option>진행</option><option>완료</option><option>지연</option><option>폐기</option></select>
+            <button class="btn btn-primary btn-sm" onclick="applyBatch()">일괄적용</button>
+            <button class="btn btn-danger btn-sm" onclick="applyNG()">NG 처리</button>
+            <button class="btn btn-secondary btn-sm" onclick="generateBatchQR()">📱 QR생성</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearSelection()">선택취소</button>
+          </div>
+        </div>
+      </div>
+      <div id="calendarTab" class="tab-content" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <div class="tab-btns" style="margin-bottom:0">
+            <button class="tab-btn active" onclick="setCalView('month',this)">월간</button>
+            <button class="tab-btn" onclick="setCalView('week',this)">주간</button>
+            <button class="tab-btn" onclick="setCalView('issues',this)">이슈보드</button>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn btn-secondary btn-sm" onclick="calPrev()">◀</button>
+          <span id="calTitle" style="font-size:14px;font-weight:600;min-width:120px;text-align:center"></span>
+          <button class="btn btn-secondary btn-sm" onclick="calNext()">▶</button>
+          <button class="btn btn-secondary btn-sm" onclick="calToday()">오늘</button>
+        </div>
+        <div id="calContent"></div>
+      </div>
+      <div id="ganttTab" class="tab-content" style="display:none">
+        <div class="gantt-controls">
+          <div class="tab-btns" style="margin-bottom:0">
+            <button class="tab-btn gantt-view-btn active" onclick="setGanttView('product',this)">제품별</button>
+            <button class="tab-btn gantt-view-btn" onclick="setGanttView('batch',this)">배치별</button>
+            <button class="tab-btn gantt-view-btn" onclick="setGanttView('process',this)">공정별</button>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="ganttExpandAllBtn" onclick="ganttToggleAll()">모두 펼치기</button>
+          <div class="mobile-break" style="flex-basis:100%;height:0"></div>
+          <select class="form-input form-select" id="ganttProdFilter" onchange="renderGantt()" style="width:130px;padding:5px 10px"><option value="">전체 제품</option></select>
+          <select class="form-input form-select" id="ganttStatusFilter" onchange="renderGantt()" style="width:100px;padding:5px 10px"><option value="">전체 상태</option><option>대기</option><option>진행</option><option>완료</option><option>지연</option></select>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:4px">
+            <button class="btn btn-secondary btn-sm" onclick="ganttZoom(-4)">-</button>
+            <span id="ganttZoomLabel" style="font-size:12px;min-width:40px;text-align:center">30px</span>
+            <button class="btn btn-secondary btn-sm" onclick="ganttZoom(4)">+</button>
+            <button class="btn btn-secondary btn-sm" style="margin-left:4px" onclick="ganttGoToday()">오늘</button>
+          </div>
+        </div>
+        <div class="gantt-grid" id="ganttGrid">
+          <div class="gantt-corner">항목</div>
+          <div class="gantt-header-wrap" id="ganttHeaderWrap"><div class="gantt-header" id="ganttHeader"></div></div>
+          <div class="gantt-sidebar" id="ganttSidebar"></div>
+          <div class="gantt-body-wrap" id="ganttBodyWrap"><div class="gantt-body" id="ganttBody"></div></div>
+        </div>
+      </div>
+      <div id="analysisTab" class="tab-content" style="display:none">
+        <div class="grid4" style="margin-bottom:16px" id="analysisKpi"></div>
+        <div class="analysis-grid">
+          <div class="card"><div class="card-title">제품별 생산</div><canvas id="prodBarChart" height="240"></canvas></div>
+          <div class="card"><div class="card-title">상태 분포</div><canvas id="analysisDonut" height="240"></canvas></div>
+          <div class="card"><div class="card-title">월별 투입/완료</div><canvas id="monthLineChart" height="240"></canvas></div>
+          <div class="card"><div class="card-title">공정별 리드타임 (계획 vs 실제)</div><canvas id="leadtimeChart" height="240"></canvas></div>
+          <div class="card"><div class="card-title">제품별 불량률 (%)</div><canvas id="defectRateChart" height="240"></canvas></div>
+          <div class="card"><div class="card-title">공정별 불량 발생 분포</div><canvas id="defectProcChart" height="240"></canvas></div>
+        </div>
+      </div>
+      <div id="aiTab" class="tab-content" style="display:none">
+        <div class="card chat-wrap">
+          <div class="quick-chips" id="quickChips">
+            <div class="quick-chip" onclick="askAI('오늘 생산 현황을 요약해줘')">📋 오늘 요약</div>
+            <div class="quick-chip" onclick="askAI('현재 지연된 생산 현황을 분석해줘')">⚠️ 지연 현황</div>
+            <div class="quick-chip" onclick="askAI('공정별 병목 구간을 진단해줘')">🔍 병목 진단</div>
+            <div class="quick-chip" onclick="askAI('이번 주 완료 예정 건을 예측해줘')">📅 이번 주 예측</div>
+            <div class="quick-chip" onclick="askAI('생산 효율 개선 제안을 해줘')">💡 개선 제안</div>
+            <div class="quick-chip" onclick="askAI('S/N 생성을 도와줘')">📦 S/N 생성 도우미</div>
+            <div class="quick-chip" onclick="askAI('설비별 가동률과 병목을 분석해줘')">🏭 설비 현황 분석</div>
+            <div class="quick-chip" onclick="askAI('제품별, 공정별 불량 패턴을 분석해줘')">📈 불량 패턴 분석</div>
+            <div class="quick-chip" onclick="askAI('이번 주 전체 데이터를 기반으로 주간 보고서를 작성해줘')">📋 주간 보고서 작성</div>
+          </div>
+          <div class="chat-messages" id="chatMessages"><div class="chat-bubble ai">안녕하세요! ESC 생산 관리 AI 어시스턴트입니다. 무엇이든 물어보세요. 자연어로 S/N 생성 명령도 가능합니다!</div></div>
+          <div class="chat-input-wrap">
+            <input class="form-input" id="chatInput" placeholder="질문 또는 명령을 입력하세요..." style="flex:1" onkeydown="if(event.key==='Enter')sendChat()">
+            <button class="btn btn-primary" onclick="sendChat()">전송</button>
+          </div>
+        </div>
+      </div>
+      <div id="settingsTab" class="tab-content" style="display:none">
+        <div style="max-width:600px">
+          <div class="card setting-section">
+            <div class="setting-title">🎨 화면 설정</div>
+            <div class="setting-row"><div><div style="font-size:14px;font-weight:500">다크 모드</div><div style="font-size:12px;color:var(--t2)">화면 테마를 전환합니다</div></div><div class="toggle" id="themeToggle" onclick="toggleTheme()"></div></div>
+          </div>
+          <div class="card setting-section">
+            <div class="setting-title">🤖 AI 설정</div>
+            <div class="form-group"><label class="form-label">Gemini API Key</label><div style="display:flex;gap:8px"><input class="form-input" type="password" id="geminiKeyInput" placeholder="AIzaSy..." style="flex:1"><button class="btn btn-primary btn-sm" onclick="saveGeminiKey()">저장</button></div><div style="font-size:11px;color:var(--t2);margin-top:4px" id="geminiKeyStatus"></div></div>
+          </div>
+          <div class="card setting-section">
+            <div class="setting-title">👤 계정 정보</div>
+            <div class="setting-row"><div><div style="font-size:14px;font-weight:500" id="settingName">-</div><div style="font-size:12px;color:var(--t2)" id="settingEmail">-</div></div><button class="btn btn-danger btn-sm" onclick="doLogout()">로그아웃</button></div>
+          </div>
+          <div class="card setting-section"><div class="setting-title">📊 데이터 현황</div><div id="dataStats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div></div>
+          <div class="card"><div class="setting-title">ℹ️ 앱 정보</div><div style="font-size:13px;color:var(--t2)">ESC Manager v9.0<br>세라믹 정전척 생산관리 시스템<br>Firebase Firestore 기반</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="bottomBar">
+    <div class="bb-item active" data-tab="home" onclick="switchTab('home')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>홈</span></div>
+    <div class="bb-item" data-tab="workspace" onclick="switchTab('workspace')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>작업</span></div>
+    <div class="bb-item" data-tab="calendar" onclick="switchTab('calendar')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>캘린더</span></div>
+    <div class="bb-item" data-tab="gantt" onclick="switchTab('gantt')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg><span>간트</span></div>
+    <div class="bb-item" data-tab="analysis" onclick="switchTab('analysis')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>분석</span></div>
+  </div>
+</div>
+<div id="sidePanel">
+  <div class="sp-header">
+    <div style="flex:1"><div style="font-size:15px;font-weight:600" id="spSN">-</div><div style="margin-top:4px;display:flex;gap:6px;align-items:center"><span id="spBadge"></span><span id="spCat" style="font-size:12px;color:var(--t2)"></span></div></div>
+    <button class="btn btn-secondary btn-sm" onclick="showSNQR()" title="QR 코드">📱 QR</button>
+    <button class="btn-icon" onclick="closeSidePanel()"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="sp-body" id="spBody"></div>
+  <div class="sp-footer">
+    <select class="form-input form-select" id="spStatusSel" style="flex:1"><option>대기</option><option>진행</option><option>완료</option><option>지연</option><option>폐기</option></select>
+    <button class="btn btn-primary btn-sm" onclick="applySpStatus()">변경</button>
+    <button class="btn btn-secondary btn-sm" onclick="openIssueModal(currentSN)">이슈</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteSN()">삭제</button>
+  </div>
+</div>
+<button id="miniChatBtn" onclick="toggleMiniChat()" title="AI 어시스턴트"><svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></button>
+<div id="miniChatWin">
+  <div class="mini-chat-header"><span>🤖 AI 어시스턴트</span><button class="btn-icon" onclick="toggleMiniChat()">✕</button></div>
+  <div id="miniChatMessages" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;font-size:12px"><div class="chat-bubble ai" style="font-size:12px">무엇을 도와드릴까요?</div></div>
+  <div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)"><input class="form-input" id="miniChatInput" placeholder="질문..." style="flex:1;font-size:12px;padding:6px 10px" onkeydown="if(event.key==='Enter')sendMiniChat()"><button class="btn btn-primary btn-sm" onclick="sendMiniChat()">↑</button></div>
+</div>
+<!-- 모달들 -->
+<div id="productModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">제품 등록</div><button class="modal-close btn-icon" onclick="closeModal('productModal')">✕</button></div>
+    <div class="form-group"><label class="form-label">제품명 *</label><input class="form-input" id="pm_name" placeholder="예: 588H"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">카테고리 *</label><select class="form-input form-select" id="pm_cat"><option value="WN">WN</option><option value="BL">BL</option><option value="HP">HP</option></select></div>
+      <div class="form-group"><label class="form-label">도면번호</label><input class="form-input" id="pm_drawing" placeholder="예: 201-00141"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">수축률</label><input class="form-input" type="number" step="0.01" id="pm_shrink" placeholder="0.82"></div>
+      <div class="form-group"><label class="form-label">적재수</label><input class="form-input" type="number" id="pm_stack" placeholder="9"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">DC Joint</label><select class="form-input form-select" id="pm_joint"><option>Brazing</option><option>Spring</option><option>Soldering</option></select></div>
+      <div class="form-group"><label class="form-label">열처리</label><select class="form-input form-select" id="pm_heat"><option value="N">N</option><option value="Y">Y</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Route (자동생성)</label><div id="pm_routePreview" style="padding:8px 12px;background:var(--bg4);border-radius:var(--r4);font-size:12px;color:var(--t2)">-</div></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-secondary" onclick="closeModal('productModal')">취소</button><button class="btn btn-primary" onclick="saveProduct()">저장</button></div>
+  </div>
+</div>
+<div id="snModal" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header"><div class="modal-title">S/N 생성</div><button class="modal-close btn-icon" onclick="closeModal('snModal')">✕</button></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">배치코드 *</label><div style="display:flex;gap:6px"><input class="form-input" id="sn_batch" list="batchList" placeholder="예: 20260301-001" style="flex:1" oninput="updateSNPreview()"><button class="btn btn-secondary btn-sm" onclick="autoBatchCode()">자동</button></div><datalist id="batchList"></datalist></div>
+      <div class="form-group"><label class="form-label">시트No (6자리) *</label><input class="form-input" id="sn_sheet" maxlength="6" placeholder="251125" oninput="onSheetNoChange()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">제품 선택 *</label><select class="form-input form-select" id="sn_prod" onchange="onSNProdChange()"><option value="">선택...</option></select></div>
+      <div class="form-group"><label class="form-label">설비</label><select class="form-input form-select" id="sn_equip" oninput="updateSNPreview();checkEquipConflict()"></select><div id="equipConflictWarn"></div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">수량 *</label><input class="form-input" type="number" id="sn_qty" value="1" min="1" max="50" oninput="updateSNPreview()"></div>
+      <div class="form-group"><label class="form-label">시작일 *</label><input class="form-input" type="date" id="sn_start" oninput="updateSNPreview();checkEquipConflict()"></div>
+    </div>
+    <div class="form-group"><label class="form-label">시작 시퀀스</label><input class="form-input" type="number" id="sn_seq" value="1" min="1" oninput="updateSNPreview()"><div style="font-size:11px;color:var(--t2);margin-top:3px" id="sn_seqHint"></div></div>
+    <div class="form-group"><label class="form-label">미리보기</label><div id="sn_preview" style="background:var(--bg4);border-radius:var(--r4);padding:10px;font-size:12px;font-family:monospace;max-height:120px;overflow-y:auto;line-height:1.8"></div></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-secondary" onclick="closeModal('snModal')">취소</button><button class="btn btn-primary" onclick="saveSNBatch()">생성</button></div>
+  </div>
+</div>
+<div id="deadlineModal" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header"><div class="modal-title">📅 납기 역산 계산기</div><button class="modal-close btn-icon" onclick="closeModal('deadlineModal')">✕</button></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">제품 선택</label><select class="form-input form-select" id="dl_prod" onchange="calcDeadline()"><option value="">선택...</option></select></div>
+      <div class="form-group"><label class="form-label">납기일</label><input class="form-input" type="date" id="dl_due" oninput="calcDeadline()"></div>
+    </div>
+    <div id="dl_result" style="margin-top:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-secondary" onclick="closeModal('deadlineModal')">닫기</button><button class="btn btn-primary" id="dl_snBtn" onclick="deadlineToSN()" style="display:none">이 일정으로 S/N 생성</button></div>
+  </div>
+</div>
+<div id="issueModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">이슈 등록</div><button class="modal-close btn-icon" onclick="closeModal('issueModal')">✕</button></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">날짜</label><input class="form-input" type="date" id="is_date"></div>
+      <div class="form-group"><label class="form-label">유형</label><select class="form-input form-select" id="is_type"><option>메모</option><option>지시</option><option>불량</option><option>폐기</option><option>기타</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">제품</label><select class="form-input form-select" id="is_prod" onchange="loadIssueSNList()"><option value="">선택...</option></select></div>
+      <div class="form-group"><label class="form-label">S/N</label><input class="form-input" id="is_sn" list="issueSNList" placeholder="S/N 입력..."><datalist id="issueSNList"></datalist></div>
+    </div>
+    <div class="form-group"><label class="form-label">내용 *</label><textarea class="form-input" id="is_content" rows="3" placeholder="이슈 내용을 입력하세요..."></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-secondary" onclick="closeModal('issueModal')">취소</button><button class="btn btn-primary" onclick="saveIssue()">저장</button></div>
+  </div>
+</div>
+<div id="reportModal" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header"><div class="modal-title">📊 일일 생산 보고서</div><button class="modal-close btn-icon" onclick="closeModal('reportModal')">✕</button></div>
+    <div id="reportContent" class="report-text"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-secondary" onclick="copyReport()">📋 복사</button><button class="btn btn-secondary" onclick="closeModal('reportModal')">닫기</button></div>
+  </div>
+</div>
+<div id="qrModal" class="modal-overlay hidden">
+  <div class="modal" style="text-align:center">
+    <div class="modal-header"><div class="modal-title">📱 QR 코드</div><button class="modal-close btn-icon" onclick="closeModal('qrModal')">✕</button></div>
+    <div id="qrCanvasWrap" style="display:flex;justify-content:center;margin:16px 0"></div>
+    <div id="qrSNLabel" style="font-size:13px;font-family:monospace;margin-bottom:12px;word-break:break-all"></div>
+    <div style="display:flex;gap:8px;justify-content:center"><button class="btn btn-primary btn-sm" onclick="downloadQR()">📥 다운로드</button><button class="btn btn-secondary btn-sm" onclick="closeModal('qrModal')">닫기</button></div>
+  </div>
+</div>
+<div id="qrPrintModal" class="modal-overlay hidden">
+  <div class="modal modal-xl">
+    <div class="modal-header"><div class="modal-title">📱 QR 일괄 인쇄</div><button class="modal-close btn-icon" onclick="closeModal('qrPrintModal')">✕</button></div>
+    <div class="qr-print-actions" style="display:flex;gap:8px;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ 인쇄</button><button class="btn btn-secondary btn-sm" onclick="closeModal('qrPrintModal')">닫기</button></div>
+    <div class="qr-print-grid" id="qrPrintGrid"></div>
+  </div>
+</div>
+<div id="widgetModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">⚙️ 위젯 설정</div><button class="modal-close btn-icon" onclick="closeModal('widgetModal')">✕</button></div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">위젯의 표시 여부와 순서를 설정합니다</div>
+    <div id="widgetSettingsList"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-secondary" onclick="resetWidgetConfig()">기본값</button><button class="btn btn-primary" onclick="saveWidgetConfig()">저장</button></div>
+  </div>
+</div>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
