@@ -118,7 +118,7 @@ const PROC_COLORS = {
 
 const EQ_MAP = {
   '탈지': ['탈지 1호기', '탈지 2호기', '탈지 3호기'],
-    '소성': ['소성 1호기','소성 4호기','소성 5호기','소성 6호기','소성 7호기','소성 8호기','소성 9호기','소성 10호기','소성 11호기','소성 12호기','소성 13호기','소성 14호기','소성 15호기','소성 16호기','소성 17호기','소성 18호기'],
+  '소성': ['소성 5호기', '소성 6호기', '소성 7호기', '소성 8호기', '소성 9호기', '소성 10호기', '소성 11호기', '소성 12호기', '소성 13호기', '소성 14호기', '소성 15호기', '소성 16호기', '소성 17호기', '소성 18호기'],
   '환원소성': ['환원 5호기', '환원 6호기', '환원 7호기', '환원 8호기', '환원 9호기', '환원 10호기', '환원 11호기', '환원 12호기', '환원 13호기', '환원 14호기', '환원 15호기', '환원 16호기', '환원 17호기', '환원 18호기'],
   '평탄화': ['평탄화 A', '평탄화 B', '평탄화 C'],
   '도금': ['도금 1라인', '도금 2라인', '도금 3라인'],
@@ -212,41 +212,31 @@ function diffBD(start, end) {
 }
 
   function getDefaultDays(proc, category, stackQty) {
-    // VBA 기준 공정별 소요일
-    switch (proc) {
-      case "탈지":     return 6;
-      case "소성":     return (stackQty >= 9) ? 5 : 3;
-      case "환원소성": return 3;  // BL 전용
-      case "평탄화":   return 3;
-      case "도금":     return 1;
-      case "열처리":   return 1;
-      default:         return 3;
-    }
+    // VBA 기준 소요일
+    if (proc === "탈지") return 6;
+    if (proc === "소성") return (stackQty >= 9) ? 5 : 3;
+    if (proc === "환원소성") return 3;
+    if (proc === "평탄화") return 3;
+    if (proc === "도금") return 1;
+    if (proc === "열처리") return 1;
+    return 3;
   }
 
-  function buildRoute(category, stackQty) {
-    const route = [];
-    route.push({ proc: "탈지", days: getDefaultDays("탈지") });
-    route.push({ proc: "소성", days: getDefaultDays("소성", category, stackQty) });
-    if (category === "BL") {
-      route.push({ proc: "환원소성", days: getDefaultDays("환원소성") });
-    }
-    route.push({ proc: "평탄화", days: getDefaultDays("평탄화") });
-    route.push({ proc: "도금", days: getDefaultDays("도금") });
-    route.push({ proc: "열처리", days: getDefaultDays("열처리") });
-    return route;
+function buildRoute(category, heat) {
+  category = (category || '').toUpperCase();
+  heat = (heat || '').toUpperCase();
+  if (category === 'WN') {
+    return heat === 'Y'
+      ? ['탈지', '소성', '환원소성', '평탄화', '도금', '열처리']
+      : ['탈지', '소성', '환원소성', '평탄화', '도금'];
   }
-
-  // VBA 기준 소성기 필터: BL→1·4호기, WN→5~18호기
-  function getAvailableFurnaces(category) {
-    const all = EQ_MAP["소성"] || [];
-    if (category === "BL") return all.filter(e => /1호기|4호기/.test(e));
-    if (category === "WN") return all.filter(e => {
-      const num = parseInt(e.match(/(\d+)호기/)?.[1] || "0");
-      return num >= 5 && num <= 18;
-    });
-    return all;
+  if (category === 'BL' || category === 'HP') {
+    return heat === 'Y'
+      ? ['탈지', '소성', '평탄화', '도금', '열처리']
+      : ['탈지', '소성', '평탄화', '도금'];
   }
+  return ['탈지', '소성', '평탄화', '도금'];
+}
 
 function extractCategory(sn) {
   if (!sn) return '';
