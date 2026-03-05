@@ -1,0 +1,20 @@
+﻿import{PROC_COLORS}from'./constants.js';
+import{DEFAULT_WIDGETS}from'./constants.js';
+
+export function fD(d){if(!d)return'';const dt=d instanceof Date?d:new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
+export function todayStr(){return fD(new Date())}
+export function addBD(d,n){let dt=new Date(d);for(let i=0;i<n;){dt.setDate(dt.getDate()+1);const w=dt.getDay();if(w!==0&&w!==6)i++;}return dt}
+export function diffBD(a,b){let s=new Date(a<b?a:b),e=new Date(a<b?b:a),c=0;while(s<e){s.setDate(s.getDate()+1);const w=s.getDay();if(w!==0&&w!==6)c++;}return a<b?c:-c}
+export function diffBDRaw(a,b){return Math.round((b-a)/(1000*60*60*24))}
+export function calcActualDays(startStr,endStr){if(!startStr||!endStr)return 0;const s=new Date(startStr);const e=new Date(endStr);let c=0,cur=new Date(s);while(cur<e){cur.setDate(cur.getDate()+1);const w=cur.getDay();if(w!==0&&w!==6)c++;}return Math.max(c,1)}
+export function buildRoute(cat,joint,heat){const r=['탈지','소성'];if(cat==='BL')r.push('환원소성');r.push('평탄화');if(joint!=='Brazing')r.push('도금');if(heat==='Y')r.push('열처리');return r.join('→')}
+export function procDays(name,cat,stack){if(name==='탈지')return 6;if(name==='소성')return(stack>=9)?5:3;if(name==='환원소성')return 3;if(name==='평탄화')return 3;if(name==='도금')return 1;if(name==='열처리')return 1;return 3}
+export function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+export function statusBadge(s){const m={'대기':'badge-wait','진행':'badge-prog','완료':'badge-done','지연':'badge-late','폐기':'badge-disc'};return`<span class="badge ${m[s]||'badge-wait'}">${s||'대기'}</span>`}
+export function calcProgress(item){const procs=item.processes||{};const route=(item.route||'').split('→').filter(Boolean);if(!route.length)return item.progress||0;const done=route.filter(p=>procs[p]&&procs[p].status==='완료').length;return Math.round(done/route.length*100)}
+export function getDplus(item){if(!item.startDate)return'-';const d=diffBD(new Date(item.startDate),new Date());return d>=0?`D+${d}`:`D-${Math.abs(d)}`}
+export function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast toast-${type}`;const icons={ok:'✅',err:'❌',warn:'⚠️'};t.innerHTML=`<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;document.getElementById('toastContainer').appendChild(t);setTimeout(()=>t.remove(),3000)}
+export function closeModal(id){document.getElementById(id).classList.add('hidden')}
+export function openModal(id){document.getElementById(id).classList.remove('hidden')}
+export function mdToHtml(text){if(!text)return'';let html=text;html=html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');html=html.replace(/`([^`]+)`/g,'<code style="background:var(--bg4);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>');html=html.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/g,function(match,headerRow,bodyRows){const headers=headerRow.split('|').map(h=>h.trim()).filter(Boolean);let table='<table style="font-size:11px;margin:6px 0;border:1px solid var(--border);border-radius:4px"><thead><tr>'+headers.map(h=>'<th style="padding:4px 6px">'+h+'</th>').join('')+'</tr></thead><tbody>';bodyRows.trim().split('\n').forEach(row=>{const cells=row.split('|').map(c=>c.trim()).filter(Boolean);table+='<tr>'+cells.map(c=>'<td style="padding:3px 6px;border-top:1px solid var(--border)">'+c+'</td>').join('')+'</tr>';});table+='</tbody></table>';return table;});html=html.replace(/^[\-\*] (.+)$/gm,'<li style="margin-left:16px;font-size:12px">$1</li>');html=html.replace(/(<li[^>]*>.*<\/li>\n?)+/g,function(m){return'<ul style="list-style:disc;padding-left:10px;margin:4px 0">'+m+'</ul>';});html=html.replace(/^\d+\. (.+)$/gm,'<li style="margin-left:16px;font-size:12px">$1</li>');html=html.replace(/\n/g,'<br>');return html}
+export function getWidgetConfig(){try{const c=JSON.parse(localStorage.getItem('esc_widget_config'));if(c&&c.length)return c;}catch(e){}return JSON.parse(JSON.stringify(DEFAULT_WIDGETS))}
