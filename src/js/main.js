@@ -224,16 +224,11 @@ function diffBD(start, end) {
     }
   }
 
-  function buildRoute(category, stackQty) {
-    const route = [];
-    route.push({ proc: "탈지", days: getDefaultDays("탈지") });
-    route.push({ proc: "소성", days: getDefaultDays("소성", category, stackQty) });
-    if (category === "BL") {
-      route.push({ proc: "환원소성", days: getDefaultDays("환원소성") });
-    }
-    route.push({ proc: "평탄화", days: getDefaultDays("평탄화") });
-    route.push({ proc: "도금", days: getDefaultDays("도금") });
-    route.push({ proc: "열처리", days: getDefaultDays("열처리") });
+  function buildRoute(category, heat) {
+    // VBA 기준 공정 경로 (문자열 배열 반환)
+    const route = ["탈지", "소성"];
+    if (category === "BL") route.push("환원소성");
+    route.push("평탄화", "도금", "열처리");
     return route;
   }
 
@@ -274,9 +269,14 @@ function getRoute(sn, item) {
   return buildRoute(cat, heat);
 }
 
-function getEquipList(proc) {
-  return EQ_MAP[proc] || [];
-}
+  function getEquipList(proc, category) {
+    const all = EQ_MAP[proc] || [];
+    // 소성 공정이면 BL/WN별 필터
+    if (proc === "소성" && category) {
+      return getAvailableFurnaces(category);
+    }
+    return all;
+  }
 
 function calcProgress(item, sn) {
   const route = getRoute(sn, item);
@@ -960,7 +960,8 @@ window.showEquipDropdown = function(e, sn, proc) {
   if (!proc) proc = item.currentProcess || '';
   if (!proc) { toast('공정을 먼저 선택하세요', 'warn'); return; }
 
-  const equipList = getEquipList(proc);
+    const _cat = extractCategory(sn) || (item && item.category ? item.category : "");
+    const equipList = getEquipList(proc, _cat);
   if (!equipList.length) { toast(`${proc} 공정의 설비 목록이 없습니다`, 'warn'); return; }
 
   const currentEquip = getProc(item, proc).equip || '';
@@ -2525,7 +2526,7 @@ window.openProcDetailModal = function(sn) {
   route.forEach((proc, idx) => {
     const p = getProc(d, proc);
     const color = PROC_COLORS[proc] || '#666';
-    const equipList = getEquipList(proc);
+    const equipList = getEquipList(proc, cat);
     const defaultDays = getDefaultDays(proc, cat);
 
     html += `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;border-left:3px solid ${color}">
@@ -2715,7 +2716,7 @@ window.onSNProdChange = function() {
   const equipSel = document.getElementById('sn_equip');
   if (equipSel) {
     const firstProc = PROC_ORDER[0];
-    const eqList = getEquipList(firstProc);
+    const eqList = getEquipList(firstProc, cat);
     equipSel.innerHTML = '<option value="">선택...</option>' + eqList.map(eq => `<option value="${esc(eq)}">${esc(eq)}</option>`).join('');
   }
   const hint = document.getElementById('sn_seqHint');
