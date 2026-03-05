@@ -161,37 +161,19 @@
             <button class="btn btn-secondary btn-sm" id="expandAllBtn" onclick="toggleAllGroups()">모두 펼치기</button>
           </div>
           <div id="wsTable" style="flex:1;overflow-y:auto"></div>
-          <div id="batchBar" class="batch-bar">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%">
-              <span id="batchCount" style="font-size:13px;font-weight:600;white-space:nowrap"></span>
-              <select class="form-input form-select" id="batchStatusSel" style="width:90px;padding:4px 6px;font-size:12px">
-                <option value="">상태</option>
-                <option value="대기">대기</option>
-                <option value="진행">진행</option>
-                <option value="완료">완료</option>
-                <option value="지연">지연</option>
-              </select>
-              <select class="form-input form-select" id="batchProcSel" style="width:90px;padding:4px 6px;font-size:12px">
-                <option value="">공정</option>
-                <option value="탈지">탈지</option>
-                <option value="소성">소성</option>
-                <option value="환원소성">환원소성</option>
-                <option value="평탄화">평탄화</option>
-                <option value="도금">도금</option>
-                <option value="열처리">열처리</option>
-              </select>
-              <select class="form-input form-select" id="batchEquipSel" style="width:110px;padding:4px 6px;font-size:12px">
-                <option value="">설비</option>
-              </select>
-              <input type="date" class="form-input" id="batchStartDate" style="width:130px;padding:4px 6px;font-size:12px" title="시작일">
-              <input type="date" class="form-input" id="batchEndDate" style="width:130px;padding:4px 6px;font-size:12px" title="납기일">
-              <div style="display:flex;gap:4px;margin-left:auto">
-                <button class="btn btn-primary btn-sm" onclick="applyBatchAll()">적용</button>
-                <button class="btn btn-danger btn-sm" onclick="applyNG()">NG</button>
-                <button class="btn btn-secondary btn-sm" onclick="generateBatchQR()">QR</button>
-                <button class="btn btn-secondary btn-sm" onclick="clearSelection()">해제</button>
-              </div>
-            </div>
+          <div id="batchBar">
+            <span id="batchCount" style="font-size:13px;font-weight:600"></span>
+            <select class="form-input form-select" id="batchStatusSel" style="width:100px;padding:5px 8px;font-size:12px">
+              <option value="">상태 선택</option>
+              <option value="대기">대기</option>
+              <option value="진행">진행</option>
+              <option value="완료">완료</option>
+              <option value="지연">지연</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="applyBatch()">적용</button>
+            <button class="btn btn-danger btn-sm" onclick="applyNG()">NG</button>
+            <button class="btn btn-secondary btn-sm" onclick="generateBatchQR()">QR</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearSelection()">해제</button>
           </div>
         </div>
 
