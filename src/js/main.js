@@ -823,16 +823,20 @@ function renderWorkspace() {
   const countEl = document.getElementById('wsSearchCount');
   if (countEl) countEl.textContent = search ? `${filtered.length}건 검색` : '';
 
+  // 2단계 그룹핑
   let groups = {};
   filtered.forEach(([sn, d]) => {
-    let key;
+    let mainKey, subKey;
     if (wsViewMode === 'batch') {
-      key = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
+      mainKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
+      subKey = d.productName || extractCategory(sn) || '기타';
     } else {
-      key = d.productName || extractCategory(sn) || '기타';
+      mainKey = d.productName || extractCategory(sn) || '기타';
+      subKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
     }
-    if (!groups[key]) groups[key] = [];
-    groups[key].push([sn, d]);
+    if (!groups[mainKey]) groups[mainKey] = {};
+    if (!groups[mainKey][subKey]) groups[mainKey][subKey] = [];
+    groups[mainKey][subKey].push([sn, d]);
   });
 
   const groupKeys = Object.keys(groups).sort();
@@ -840,75 +844,85 @@ function renderWorkspace() {
 
   let html = '';
   groupKeys.forEach(key => {
-    const items = groups[key];
+    const subGroups = groups[key];
+    const allItems = Object.values(subGroups).flat();
     const collapsed = wsGroupState[key];
-    const doneCount = items.filter(([, d]) => (d.status || '대기') === '완료').length;
-    const label = wsViewMode === 'batch'
-      ? `${esc(key)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${items.length}개 LOT)</span>`
+    const doneCount = allItems.filter(([, d]) => (d.status || '대기') === '완료').length;
+    const mainLabel = wsViewMode === 'batch'
+      ? `${esc(key)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${allItems.length}개 LOT)</span>`
       : esc(key);
 
     html += `<div class="ws-group">
       <div class="ws-group-header" onclick="toggleGroup('${esc(key)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r4);margin-bottom:4px;user-select:none">
         <span style="font-size:12px;transition:transform 0.2s;transform:rotate(${collapsed ? '0' : '90'}deg)">▶</span>
-        <span style="font-weight:600;font-size:14px;flex:1">${label}</span>
-        <span style="font-size:12px;color:var(--t2)">${doneCount}/${items.length} 완료</span>
+        <span style="font-weight:600;font-size:14px;flex:1">${mainLabel}</span>
+        <span style="font-size:12px;color:var(--t2)">${doneCount}/${allItems.length} 완료</span>
       </div>`;
 
     if (!collapsed) {
-      html += `<div class="table-responsive"><table class="table ws-table">
-        <thead><tr>
-          <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(key)}',this.checked)"></th>
-          <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
-        </tr></thead><tbody>`;
+      const subKeys = Object.keys(subGroups).sort();
+      subKeys.forEach(sk => {
+        const items = subGroups[sk];
+        const subStateKey = key + '::' + sk;
+        if (wsGroupState[subStateKey] === undefined) wsGroupState[subStateKey] = false;
+        const subCollapsed = wsGroupState[subStateKey];
+        const subDone = items.filter(([, d]) => (d.status || '대기') === '완료').length;
+        const subLabel = wsViewMode === 'batch' ? '제품: ' + esc(sk) : '배치: ' + esc(sk);
 
-      items.forEach(([sn, d]) => {
-        const status = d.status || '대기';
-        const route = getRoute(sn, d);
-        const curProc = d.currentProcess || route[0] || '';
-        const procData = getProc(d, curProc);
-        const equip = procData.equip || '';
-        const startDate = fD(procData.planStart || procData.actualStart || d.startDate);
-        const endDate = fD(d.endDate);
-        const progress = calcProgress(d, sn);
-        const checked = wsSelection.has(sn) ? 'checked' : '';
+        html += `<div style="margin-left:16px;margin-bottom:2px">
+          <div onclick="toggleGroup('${esc(subStateKey)}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg2);border-radius:var(--r4);margin-bottom:2px;user-select:none">
+            <span style="font-size:10px;transition:transform 0.2s;transform:rotate(${subCollapsed ? '0' : '90'}deg)">▶</span>
+            <span style="font-size:13px;font-weight:500;flex:1">${subLabel} <span style="font-size:11px;color:var(--t2)">(${items.length})</span></span>
+            <span style="font-size:11px;color:var(--t2)">${subDone}/${items.length}</span>
+          </div>`;
 
-        html += `<tr class="ws-row ${status === '지연' ? 'row-delay' : ''}" data-sn="${esc(sn)}">
-          <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
-          <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
-          <td>${statusBadge(status)}</td>
-          <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
-            <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
-          </td>
-          <td class="equip-cell" onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="cursor:pointer" title="클릭하여 설비 변경">
-            ${esc(equip || '-')} <span style="font-size:10px;color:var(--t2)">▼</span>
-          </td>
-          <td class="date-cell">
-            <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" style="background:transparent;border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:2px 4px;font-size:12px;width:120px">
-          </td>
-          <td style="font-size:12px">${fmt(endDate)}</td>
-          <td>
-            <div class="progress-bar-wrap" style="display:flex;align-items:center;gap:6px">
-              <div class="progress-bar" style="flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
-                <div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress >= 50 ? 'var(--ac2)' : 'var(--warn)'};border-radius:3px;transition:width 0.3s"></div>
-              </div>
-              <span style="font-size:11px;color:var(--t2);min-width:32px">${progress}%</span>
-            </div>
-          </td>
-        </tr>`;
+        if (!subCollapsed) {
+          html += `<div class="table-responsive"><table class="table ws-table">
+            <thead><tr>
+              <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(subStateKey)}',this.checked)"></th>
+              <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
+            </tr></thead><tbody>`;
+
+          items.forEach(([sn, d]) => {
+            const status = d.status || '대기';
+            const route = getRoute(sn, d);
+            const curProc = d.currentProcess || route[0] || '';
+            const procData = getProc(d, curProc);
+            const equip = procData.equip || '';
+            const startDate = fD(procData.planStart || procData.actualStart || d.startDate);
+            const endDate = fD(d.endDate);
+            const progress = calcProgress(d, sn);
+            const checked = wsSelection.has(sn) ? 'checked' : '';
+
+            html += `<tr class="ws-row ${status === '지연' ? 'row-delay' : ''}" data-sn="${esc(sn)}">
+              <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
+              <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
+              <td>${statusBadge(status)}</td>
+              <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
+                <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
+              </td>
+              <td class="equip-cell" onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="cursor:pointer" title="클릭하여 설비 변경">
+                ${esc(equip || '-')} <span style="font-size:10px;color:var(--t2)">▼</span>
+              </td>
+              <td class="date-cell">
+                <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" style="background:transparent;border:none;color:inherit;font-size:12px;width:120px">
+              </td>
+              <td style="font-size:12px">${fmt(endDate)}</td>
+              <td><div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};border-radius:3px;transition:width 0.3s"></div></div><span style="font-size:11px;color:var(--t2)">${progress}%</span></div></td>
+            </tr>`;
+          });
+          html += '</tbody></table></div>';
+        }
+        html += '</div>';
       });
-
-      html += '</tbody></table></div>';
     }
     html += '</div>';
   });
 
-  if (!groupKeys.length) {
-    html = '<div style="text-align:center;padding:40px;color:var(--t2)">데이터가 없습니다</div>';
-  }
-
-  table.innerHTML = html;
+  table.innerHTML = html || '<div style="text-align:center;padding:40px;color:var(--t2)">데이터가 없습니다</div>';
   updateBatchBar();
 }
+
 
 // === 공정/설비 드롭다운 ===
 function closeAllDropdowns() {
@@ -1046,14 +1060,20 @@ window.toggleSNSelect = function(sn, checked) {
 
 window.toggleGroupSelect = function(key, checked) {
   Object.entries(DATA).forEach(([sn, d]) => {
-    let groupKey;
-    if (wsViewMode === 'batch') {
-      groupKey = d.batch || sn.replace(/-\d+$/, '') || '기타';
+    let mainKey, subKey;
+    if (wsViewMode === "batch") {
+      mainKey = d.batch || d.batchId || extractBatchFromSN(sn) || "기타";
+      subKey = d.productName || extractCategory(sn) || "기타";
     } else {
-      groupKey = d.productName || extractCategory(sn) || '기타';
+      mainKey = d.productName || extractCategory(sn) || "기타";
+      subKey = d.batch || d.batchId || extractBatchFromSN(sn) || "기타";
     }
-    if (groupKey === key) {
-      if (checked) wsSelection.add(sn); else wsSelection.delete(sn);
+    // 서브그룹 키 (제품::배치) 또는 메인그룹 키 매칭
+    const subStateKey = mainKey + "::" + subKey;
+    if (key === subStateKey || key === mainKey) {
+      if (key === mainKey || key === subStateKey) {
+        if (checked) wsSelection.add(sn); else wsSelection.delete(sn);
+      }
     }
   });
   renderWorkspace();
