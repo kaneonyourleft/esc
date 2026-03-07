@@ -2747,21 +2747,20 @@ window.downloadQR = function() {
 };
 
 // === 제품 등록 ===
-﻿  window.openProductModal = function() {
-    openModal('productModal');
-    setTimeout(function(){ showProductList(); }, 100);
+  window.openProductModal = function() {
+    openModal("productModal");
+    setTimeout(function(){ if (typeof showProductList === "function") showProductList(); }, 50);
   };
 
   window.showProductList = function() {
-    try {
-    var lv = document.getElementById('pm_listView');
-    var fv = document.getElementById('pm_formView');
-    var tt = document.getElementById('pm_title');
-    if (lv) lv.style.display = '';
-    if (fv) fv.style.display = 'none';
-    if (tt) tt.textContent = String.fromCodePoint(0x1F4E6) + ' 제품 관리';
-    renderProductList();
-  }
+    var lv = document.getElementById("pm_listView");
+    var fv = document.getElementById("pm_formView");
+    var tt = document.getElementById("pm_title");
+    if (lv) lv.style.display = "";
+    if (fv) fv.style.display = "none";
+    if (tt) tt.textContent = "\ud83d\udce6 \uc81c\ud488 \uad00\ub9ac";
+    if (typeof renderProductList === "function") renderProductList();
+  };
 
   window.showProductForm = function(editName) {
     var lv = document.getElementById('pm_listView');
