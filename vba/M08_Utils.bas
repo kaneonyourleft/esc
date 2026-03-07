@@ -172,9 +172,12 @@ End Function
 ' 式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式式
 
 Public Function GetProcDaysByName(prodName As String, procName As String) As Long
-       On Error Resume Next
+    On Error Resume Next
     Dim wsPrd As Worksheet: Set wsPrd = ThisWorkbook.sheets(SHT_PRODUCT)
+    Dim pRow As Long: pRow = FindProductRow(prodName)
     Dim days As Long: days = 0
+    
+    If pRow = 0 Then GetProcDaysByName = 0: Exit Function
     
     Select Case Trim(procName)
         Case PROC_DEGREASING:  days = SafeLng(wsPrd.Cells(pRow, PRD_COL_D1).Value)
@@ -185,7 +188,7 @@ Public Function GetProcDaysByName(prodName As String, procName As String) As Lon
         Case PROC_HEATTREAT:   days = SafeLng(wsPrd.Cells(pRow, PRD_COL_D6).Value)
     End Select
     
-    GetProcDaysByProduct = days
+    GetProcDaysByName = days
     On Error GoTo 0
 End Function
 

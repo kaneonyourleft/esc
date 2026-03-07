@@ -108,12 +108,12 @@ let unsubIssues = null;
 const PROC_ORDER = ['탈지', '소성', '환원소성', '평탄화', '도금', '열처리'];
 
 const PROC_COLORS = {
-  '탈지': '#f59e0b',
-  '소성': '#ef4444',
-  '환원소성': '#f97316',
-  '평탄화': '#3b82f6',
-  '도금': '#8b5cf6',
-  '열처리': '#10b981'
+  '탈지': '#06b6d4',
+  '소성': '#f97316',
+  '환원소성': '#a855f7',
+  '평탄화': '#10b981',
+  '도금': '#eab308',
+  '열처리': '#ef4444'
 };
 
 const EQ_MAP = {
@@ -224,11 +224,16 @@ function diffBD(start, end) {
     }
   }
 
-  function buildRoute(category, heat) {
-    // VBA 기준 공정 경로 (문자열 배열 반환)
+  function buildRoute(category, heat, dcJoint) {
+    // VBA BuildRoute 기준 공정 경로
+    const cat = (category || "").toUpperCase();
+    const h = (heat || "N").toUpperCase();
+    const dc = (dcJoint || "").toUpperCase();
     const route = ["탈지", "소성"];
-    if (category === "BL") route.push("환원소성");
-    route.push("평탄화", "도금", "열처리");
+    if (cat === "BL") route.push("환원소성");
+    route.push("평탄화");
+    if (dc !== "BRAZING") route.push("도금");
+    if (h === "Y") route.push("열처리");
     return route;
   }
 
@@ -264,7 +269,7 @@ function getRoute(sn, item) {
   }
   const cat = extractCategory(sn) || (item && item.category ? item.category : '');
   const heat = item && item.heat ? item.heat : 'N';
-  return buildRoute(cat, heat);
+  return buildRoute(cat, heat, item && item.dcJoint ? item.dcJoint : "");
 }
 
   // VBA GetEquipListForProc 완전 반영
@@ -2190,7 +2195,7 @@ window.calcDeadline = function() {
 
   const cat = prod.category || 'WN';
   const heat = prod.heat || 'N';
-  const route = buildRoute(cat, heat);
+  const route = buildRoute(cat, heat, prod.dcJoint || "");
 
   let html = '<div class="card" style="margin:0"><div class="card-title">역산 결과</div>';
   html += '<table class="table"><thead><tr><th>공정</th><th>소요일</th><th>시작일</th><th>종료일</th></tr></thead><tbody>';
@@ -2749,7 +2754,7 @@ window.openProductModal = function() { openModal('productModal'); };
   if (el) el.addEventListener('change', () => {
     const cat = document.getElementById('pm_cat').value;
     const heat = document.getElementById('pm_heat').value;
-    const route = buildRoute(cat, heat);
+    const route = buildRoute(cat, heat, "");
     document.getElementById('pm_routePreview').textContent = route.join(' → ');
   });
 });
@@ -2764,7 +2769,7 @@ window.saveProduct = async function() {
   const stack = parseInt(document.getElementById('pm_stack').value) || 0;
   const joint = document.getElementById('pm_joint').value;
   const heat = document.getElementById('pm_heat').value;
-  const route = buildRoute(cat, heat);
+  const route = buildRoute(cat, heat, "");
 
   try {
     const ref = FB.doc(firebaseDb, 'products', name);
@@ -2875,7 +2880,7 @@ window.saveSNBatch = async function() {
 
   const cat = prod.category || 'WN';
   const heat = prod.heat || 'N';
-  const route = buildRoute(cat, heat);
+  const route = buildRoute(cat, heat, "");
   const name = (prod.name || '').replace(/\s/g, '');
 
   try {
@@ -3133,6 +3138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
 
 
 
