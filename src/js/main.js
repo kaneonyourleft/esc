@@ -2846,40 +2846,55 @@ window.downloadQR = function() {
   }
 
 
-['pm_cat', 'pm_heat'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('change', () => {
-    const cat = document.getElementById('pm_cat').value;
-    const heat = document.getElementById('pm_heat').value;
-    const route = buildRoute(cat, heat, "");
-    document.getElementById('pm_routePreview').textContent = route.join(' → ');
-  });
-});
+  window.saveProduct = async function() {
+    const editMode = document.getElementById("pm_editMode").value === "edit";
+    const name = document.getElementById("pm_name").value.trim();
+    const cat = document.getElementById("pm_cat").value;
+    if (!name) { toast("제품명을 입력하세요", "warn"); return; }
 
-window.saveProduct = async function() {
-  const name = document.getElementById('pm_name').value.trim();
-  const cat = document.getElementById('pm_cat').value;
-  if (!name) { toast('제품명을 입력하세요', 'warn'); return; }
+    const dc = document.getElementById("pm_joint").value;
+    const heat = document.getElementById("pm_heat").value;
+    const data = {
+      name,
+      category: cat,
+      drawing: document.getElementById("pm_drawing").value.trim(),
+      shrinkage: parseFloat(document.getElementById("pm_shrink").value) || 0,
+      stackQty: parseInt(document.getElementById("pm_stack").value) || 0,
+      dcJoint: dc,
+      heatTreat: heat === "Y",
+      d1: parseInt(document.getElementById("pm_d1").value) || 0,
+      d2: parseInt(document.getElementById("pm_d2").value) || 0,
+      d3: parseInt(document.getElementById("pm_d3").value) || 0,
+      d4: parseInt(document.getElementById("pm_d4").value) || 0,
+      d5: parseInt(document.getElementById("pm_d5").value) || 0,
+      d6: parseInt(document.getElementById("pm_d6").value) || 0,
+      route: buildRoute(cat, heat, dc),
+      updatedAt: todayStr()
+    };
 
-  const drawing = document.getElementById('pm_drawing').value.trim();
-  const shrink = parseFloat(document.getElementById('pm_shrink').value) || 0;
-  const stack = parseInt(document.getElementById('pm_stack').value) || 0;
-  const joint = document.getElementById('pm_joint').value;
-  const heat = document.getElementById('pm_heat').value;
-  const route = buildRoute(cat, heat, "");
+    try {
+      await FB.setDoc(FB.doc(firebaseDb, "products", name), data);
+      toast("제품 \"" + name + "\" " + (editMode ? "수정" : "등록") + " 완료", "success");
+      PRODUCTS[name] = data;
+      populateProductSelects();
+      showProductList();
+    } catch (err) { handleFirestoreError(err, "제품 저장"); }
+  };
 
-  try {
-    const ref = FB.doc(firebaseDb, 'products', name);
-    await FB.setDoc(ref, { name, category: cat, drawing, shrink, stack, joint, heat, route, createdAt: todayStr() });
-    toast(`제품 "${name}" 등록 완료`, 'success');
-    closeModal('productModal');
-    document.getElementById('pm_name').value = '';
-    const snap = await FB.getDocs(FB.collection(firebaseDb, 'products'));
-    PRODUCTS = {};
-    snap.forEach(d => { PRODUCTS[d.id] = d.data(); });
-    populateProductSelects();
-  } catch (err) { handleFirestoreError(err, '제품 등록'); }
-};
+  window.deleteProduct = async function(name, snCount) {
+    if (snCount > 0) {
+      if (!confirm(name + "에 연결된 S/N이 " + snCount + "건 있습니다.\n제품만 삭제되고 S/N 데이터는 유지됩니다.\n정말 삭제하시겠습니까?")) return;
+    } else {
+      if (!confirm(name + " 제품을 삭제하시겠습니까?")) return;
+    }
+    try {
+      await FB.deleteDoc(FB.doc(firebaseDb, "products", name));
+      delete PRODUCTS[name];
+      toast("제품 \"" + name + "\" 삭제 완료", "success");
+      populateProductSelects();
+      renderProductList();
+    } catch (err) { handleFirestoreError(err, "제품 삭제"); }
+  };
 
 // === S/N 생성 ===
 window.openSNModal = function() {
