@@ -324,9 +324,9 @@ function toast(msg, type = 'info') {
   }, 3000);
 }
 
-window.openModal = function(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.remove('hidden');
+  window.openModal = function(id) {
+    document.querySelectorAll('.modal-overlay').forEach(function(m){ if(m.id !== id) m.classList.add('hidden'); });
+    var el = document.getElementById(id); if (el) el.classList.remove('hidden');
 };
 
 window.closeModal = function(id) {
