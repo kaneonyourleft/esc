@@ -2752,7 +2752,7 @@ window.downloadQR = function() {
     openModal('productModal');
   };
 
-  function showProductList() {
+  window.showProductList = function() {
     var lv = document.getElementById('pm_listView');
     var fv = document.getElementById('pm_formView');
     var tt = document.getElementById('pm_title');
@@ -2817,7 +2817,7 @@ window.downloadQR = function() {
     if (el) el.innerHTML = route.map(function(p){ return '<span style="display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;color:#fff;background:' + (PROC_COLORS[p]||'#666') + '">' + esc(p) + '</span>'; }).join(' \u2192 ');
   };
 
-  function renderProductList() {
+  window.renderProductList = function() {
     var container = document.getElementById('pm_productList');
     var countEl = document.getElementById('pm_count');
     if (!container) return;
