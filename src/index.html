@@ -494,6 +494,18 @@
         <div class="modal-title">📦 제품 등록</div>
         <button class="modal-close btn-icon" onclick="closeModal('productModal')">✕</button>
       </div>
+      <!-- 제품 목록 뷰 -->
+      <div id="pm_listView">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:13px;color:var(--tx2)">등록된 제품 (<span id="pm_count">0</span>개)</span>
+          <button class="btn btn-primary btn-sm" onclick="showProductForm()">+ 새 제품</button>
+        </div>
+        <div id="pm_productList" style="max-height:400px;overflow-y:auto"></div>
+      </div>
+      <!-- 제품 폼 뷰 -->
+      <div id="pm_formView">
+      <input type="hidden" id="pm_editMode" value="">
+      <input type="hidden" id="pm_origName" value="">
       <div class="form-group">
         <label class="form-label">제품명 *</label>
         <input class="form-input" id="pm_name" placeholder="제품명">
@@ -501,7 +513,7 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">카테고리 *</label>
-          <select class="form-input form-select" id="pm_cat">
+          <select class="form-input form-select" id="pm_cat" onchange="previewRoute()">
             <option value="WN">WN</option>
             <option value="BL">BL</option>
             <option value="HP">HP</option>
@@ -509,7 +521,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">열처리</label>
-          <select class="form-input form-select" id="pm_heat">
+          <select class="form-input form-select" id="pm_heat" onchange="previewRoute()">
             <option value="N">N (없음)</option>
             <option value="Y">Y (있음)</option>
           </select>
@@ -531,22 +543,34 @@
           <input class="form-input" id="pm_stack" type="number" value="0">
         </div>
         <div class="form-group">
-          <label class="form-label">접합 방식</label>
-          <select class="form-input form-select" id="pm_joint">
+          <label class="form-label">DC 접합</label>
+          <select class="form-input form-select" id="pm_joint" onchange="previewRoute()">
             <option value="">선택...</option>
-            <option value="DB">확산접합(DB)</option>
-            <option value="GB">유리접합(GB)</option>
-            <option value="없음">없음</option>
+            <option value="SOLDERING">SOLDERING</option>
+            <option value="BRAZING">BRAZING</option>
+            <option value="SPRING">SPRING</option>
           </select>
         </div>
       </div>
       <div class="form-group">
+      <div class="form-group">
+        <label class="form-label">공정일수 (D1~D6)</label>
+        <div style="display:flex;gap:4px">
+          <input class="form-input" id="pm_d1" type="number" value="6" style="width:48px" title="탈지">
+          <input class="form-input" id="pm_d2" type="number" value="5" style="width:48px" title="소성">
+          <input class="form-input" id="pm_d3" type="number" value="0" style="width:48px" title="환원소성">
+          <input class="form-input" id="pm_d4" type="number" value="3" style="width:48px" title="평탄화">
+          <input class="form-input" id="pm_d5" type="number" value="1" style="width:48px" title="도금">
+          <input class="form-input" id="pm_d6" type="number" value="0" style="width:48px" title="열처리">
+        </div>
+        <div style="font-size:10px;color:var(--tx3);margin-top:2px">탈지 / 소성 / 환원소성 / 평탄화 / 도금 / 열처리</div>
+      </div>
         <label class="form-label">공정 루트 (자동)</label>
         <div id="pm_routePreview" style="font-size:12px;color:var(--ac2);padding:8px;background:var(--bg4);border-radius:var(--r4)">카테고리 선택 시 자동 표시</div>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn btn-secondary" onclick="closeModal('productModal')">취소</button>
-        <button class="btn btn-primary" onclick="saveProduct()">등록</button>
+        <button class="btn btn-secondary" onclick="showProductList()">← 목록</button>
+        <button class="btn btn-primary" id="pm_saveBtn" onclick="saveProduct()">등록</button>
       </div>
     </div>
   </div>
@@ -656,6 +680,7 @@
         <button class="btn btn-secondary" onclick="resetWidgetConfig()">기본값 복원</button>
         <button class="btn btn-primary" onclick="saveWidgetConfig()">저장</button>
       </div>
+      </div> <!-- /pm_formView -->
     </div>
   </div>
 
