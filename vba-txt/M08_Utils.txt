@@ -201,7 +201,8 @@ Public Sub CalcAndWriteDays(wsPrd As Worksheet, r As Long)
     Dim stack As Long: stack = SafeLng(wsPrd.Cells(r, PRD_COL_STACK).Value)
     Dim dc    As String: dc = SafeStr(wsPrd.Cells(r, PRD_COL_DC).Value)
     Dim heat  As String: heat = SafeStr(wsPrd.Cells(r, PRD_COL_HEAT).Value)
-    Dim route As String: route = BuildRoute(pType, heat)
+    Dim dcJoint As String: dcJoint = Trim(CStr(wsPrd.Cells(r, PRD_COL_DCJOINT).Value))
+    Dim route As String: route = BuildRoute(pType, heat, dcJoint)
     Dim d1 As Long, d2 As Long, d3 As Long, d4 As Long, d5 As Long, d6 As Long
 
     d1 = GetProcDays(PROC_DEGREASING, pType, stack, dc)

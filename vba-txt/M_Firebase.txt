@@ -521,22 +521,37 @@ Public Sub PullFromFirebase()
         procStart = InStr(dJson, """processes""")
         
         If procStart > 0 Then
-            ' processes 맵 안의 각 공정 파싱
-            Dim procNames As Variant
-            procNames = Array(PROC_DEGREASING, PROC_SINTERING, PROC_REDUCTION, _
-                              PROC_FLATTENING, PROC_PLATING, PROC_HEATTREAT)
+            ' processes 맵 안의 각 공정을 동적으로 파싱 (하드코딩 제거)
+            Dim procSection As String
+            Dim procFieldsPos As Long
+            procFieldsPos = InStr(procStart, dJson, """fields"":{""") 
+            If procFieldsPos = 0 Then GoTo SkipProcs
             
-            Dim pni As Long
-            For pni = 0 To UBound(procNames)
-                Dim pn As String: pn = CStr(procNames(pni))
-                Dim pnPos As Long
-                pnPos = InStr(procStart, dJson, """" & pn & """")
-                If pnPos = 0 Then GoTo NextPullProc
+            ' processes.fields 내부에서 공정명 키를 동적으로 탐색
+            Dim scanPos As Long: scanPos = procFieldsPos + 10
+            Dim procEndPos As Long: procEndPos = FindDocEnd(dJson, procStart)
+            
+            Do While scanPos < procEndPos
+                ' 다음 키(공정명) 찾기: "공정명":{"mapValue"...
+                Dim keyStart As Long: keyStart = InStr(scanPos, dJson, """")
+                If keyStart = 0 Or keyStart >= procEndPos Then Exit Do
+                Dim keyEnd As Long: keyEnd = InStr(keyStart + 1, dJson, """")
+                If keyEnd = 0 Then Exit Do
                 
-                ' 이 공정의 맵 범위 추출
+                Dim pn As String: pn = Mid(dJson, keyStart + 1, keyEnd - keyStart - 1)
+                
+                ' 시스템 키 스킵 (공정명이 아닌 경우)
+                If pn = "mapValue" Or pn = "fields" Or pn = "stringValue" Or _
+                   pn = "integerValue" Or pn = "booleanValue" Or pn = "doubleValue" Then
+                    scanPos = keyEnd + 1: GoTo NextDynProc
+                End If
+                
+                ' 이 공정의 fields 블록 추출
                 Dim pnFieldsStart As Long
-                pnFieldsStart = InStr(pnPos, dJson, """fields"":")
-                If pnFieldsStart = 0 Then GoTo NextPullProc
+                pnFieldsStart = InStr(keyEnd, dJson, """fields"":")
+                If pnFieldsStart = 0 Or pnFieldsStart >= procEndPos Then
+                    scanPos = keyEnd + 1: GoTo NextDynProc
+                End If
                 
                 Dim pnEnd As Long
                 pnEnd = FindDocEnd(dJson, pnFieldsStart)
@@ -560,20 +575,23 @@ Public Sub PullFromFirebase()
                     wsPlog.Cells(plogRow, PLOG_COL_PROC).Value = pn
                 End If
                 
-                wsPlog.Cells(plogRow, PLOG_COL_ORDER).Value = val(ExtractField(pnJson, "order"))
+                wsPlog.Cells(plogRow, PLOG_COL_ORDER).Value = Val(ExtractField(pnJson, "order"))
                 wsPlog.Cells(plogRow, PLOG_COL_EQUIP).Value = ExtractField(pnJson, "equip")
                 wsPlog.Cells(plogRow, PLOG_COL_STATUS).Value = ExtractField(pnJson, "status")
                 wsPlog.Cells(plogRow, PLOG_COL_SDATE).Value = ExtractField(pnJson, "startDate")
                 wsPlog.Cells(plogRow, PLOG_COL_PLANEND).Value = ExtractField(pnJson, "planEnd")
                 wsPlog.Cells(plogRow, PLOG_COL_ACTEND).Value = ExtractField(pnJson, "actualEnd")
-                wsPlog.Cells(plogRow, PLOG_COL_PLANDAYS).Value = val(ExtractField(pnJson, "planDays"))
-                wsPlog.Cells(plogRow, PLOG_COL_ACTDAYS).Value = val(ExtractField(pnJson, "actualDays"))
+                wsPlog.Cells(plogRow, PLOG_COL_PLANDAYS).Value = Val(ExtractField(pnJson, "planDays"))
+                wsPlog.Cells(plogRow, PLOG_COL_ACTDAYS).Value = Val(ExtractField(pnJson, "actualDays"))
                 wsPlog.Cells(plogRow, PLOG_COL_DEFECT).Value = ExtractField(pnJson, "defect")
                 wsPlog.Cells(plogRow, PLOG_COL_REMARK).Value = ExtractField(pnJson, "remark")
                 wsPlog.Cells(plogRow, PLOG_COL_LOGTIME).Value = Now()
                 updPlog = updPlog + 1
-NextPullProc:
-            Next pni
+                
+                scanPos = pnEnd + 1
+NextDynProc:
+            Loop
+SkipProcs:
         End If
 
         If di Mod 20 = 0 Then
