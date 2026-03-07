@@ -1,0 +1,1017 @@
+﻿Attribute VB_Name = "M_Firebase"
+Option Explicit
+' ============================================================
+'  M_Firebase v12.4 ? ESC Production Management System
+'  Firebase REST API 연동 (공정별 펼침 구조)
+'  ★ v12.4 변경:
+'    - PullFromFirebase: 엑셀에 없는 SN → Firebase에서 삭제 (엑셀=마스터)
+'    - 중복 DeleteOrphanDocs 제거, CleanupFirebase로 통합
+'    - Pull 시 신규 추가 없이 삭제만 수행
+' ============================================================
+
+Private Const PROJECT_ID As String = "esc-production-management"
+Private Const BASE_URL As String = "https://firestore.googleapis.com/v1/projects/esc-production-management/databases/(default)/documents/"
+Private Const API_KEY As String = "AIzaSyAwDS2PigihTH6RKMxzrH-utlaKJbtHBTY"
+Private mIdToken As String
+
+' ────────────────────────────────────────────
+'  Firebase Auth
+' ────────────────────────────────────────────
+Private Function GetIdToken() As String
+    If mIdToken <> "" Then
+        GetIdToken = mIdToken
+        Exit Function
+    End If
+    
+    Const AUTH_EMAIL As String = "vba@esc.com"
+    Const AUTH_PASS As String = "Esc12345!"
+    
+    Dim authUrl As String
+    authUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" & API_KEY
+    
+    Dim body As String
+    body = "{""email"":""" & AUTH_EMAIL & """,""password"":""" & AUTH_PASS & """,""returnSecureToken"":true}"
+    
+    Dim xhr As New MSXML2.XMLHTTP60
+    xhr.Open "POST", authUrl, False
+    xhr.setRequestHeader "Content-Type", "application/json"
+    xhr.sEnd body
+    
+    If xhr.status = 200 Then
+        Dim resp As String: resp = xhr.responseText
+        Dim tPos As Long: tPos = InStr(resp, """idToken""")
+        If tPos > 0 Then
+            Dim tStart As Long: tStart = InStr(tPos, resp, ": """) + 3
+            Dim tEnd As Long: tEnd = InStr(tStart, resp, """")
+            mIdToken = Mid(resp, tStart, tEnd - tStart)
+        End If
+        GetIdToken = mIdToken
+    Else
+        MsgBox "Firebase 인증 실패: " & xhr.status & vbCrLf & xhr.responseText, vbCritical
+        GetIdToken = ""
+    End If
+End Function
+
+' ────────────────────────────────────────────
+'  HTTP 헬퍼
+' ────────────────────────────────────────────
+Private Function HttpRequest(url As String, method As String, Optional body As String = "") As String
+    Dim xhr As New MSXML2.XMLHTTP60
+    
+    Dim fullUrl As String
+    If InStr(url, "?") > 0 Then
+        fullUrl = url & "&key=" & API_KEY
+    Else
+        fullUrl = url & "?key=" & API_KEY
+    End If
+    
+    Dim token As String: token = GetIdToken()
+    
+    xhr.Open method, fullUrl, False
+    xhr.setRequestHeader "Content-Type", "application/json"
+    If token <> "" Then xhr.setRequestHeader "Authorization", "Bearer " & token
+    
+    If body <> "" Then xhr.sEnd body Else xhr.sEnd
+    
+    If xhr.status >= 200 And xhr.status < 300 Then
+        HttpRequest = xhr.responseText
+    Else
+        If xhr.status = 401 Then
+            mIdToken = ""
+            token = GetIdToken()
+            If token <> "" Then
+                xhr.Open method, fullUrl, False
+                xhr.setRequestHeader "Content-Type", "application/json"
+                xhr.setRequestHeader "Authorization", "Bearer " & token
+                If body <> "" Then xhr.sEnd body Else xhr.sEnd
+                If xhr.status >= 200 And xhr.status < 300 Then
+                    HttpRequest = xhr.responseText
+                    Exit Function
+                End If
+            End If
+        End If
+        HttpRequest = "ERROR:" & xhr.status & ":" & xhr.responseText
+    End If
+End Function
+
+Private Function EncodeUrl(str As String) As String
+    Dim i As Long, c As String, res As String
+    For i = 1 To Len(str)
+        c = Mid(str, i, 1)
+        If c Like "[A-Za-z0-9\-\_\.\~]" Then
+            res = res & c
+        Else
+            Dim b() As Byte: b = StrConv(c, vbFromUnicode)
+            Dim j As Long
+            For j = 0 To UBound(b)
+                res = res & "%" & Right("0" & Hex(b(j)), 2)
+            Next j
+        End If
+    Next i
+    EncodeUrl = res
+End Function
+
+' ────────────────────────────────────────────
+'  Firestore 값 변환
+' ────────────────────────────────────────────
+Private Function FsString(val As Variant) As String
+    FsString = """stringValue"":""" & Replace(Replace(CStr(val & ""), "\", "\\"), """", "\""") & """"
+End Function
+
+Private Function FsNumber(val As Variant) As String
+    If IsEmpty(val) Or Len(Trim(CStr(val & ""))) = 0 Then
+        FsNumber = """integerValue"":""0"""
+        Exit Function
+    End If
+    If Not IsNumeric(val) Then
+        FsNumber = """integerValue"":""0"""
+        Exit Function
+    End If
+    If InStr(CStr(val), ".") > 0 Then
+        FsNumber = """doubleValue"":" & CStr(CDbl(val))
+    Else
+        FsNumber = """integerValue"":""" & CStr(CLng(val)) & """"
+    End If
+End Function
+
+' ────────────────────────────────────────────
+'  [1] 연결 테스트
+' ────────────────────────────────────────────
+Public Sub TestFirebaseConnection()
+    Dim resp As String
+    resp = HttpRequest(BASE_URL & "products?pageSize=1", "GET")
+    If Left(resp, 5) = "ERROR" Then
+        MsgBox Chr(10060) & " Firebase 연결 실패" & vbCrLf & resp, vbCritical
+    Else
+        MsgBox Chr(9989) & " Firebase 연결 성공!" & vbCrLf & _
+               "프로젝트: " & PROJECT_ID & vbCrLf & _
+               "응답: " & Len(resp) & " bytes", vbInformation
+    End If
+End Sub
+
+' ────────────────────────────────────────────
+'  [2] PushToFirebase
+'────────────────────────────────────────────
+'  [2] PushToFirebase  ★ v12.5 수정: Push 후 자동 삭제 동기화
+'────────────────────────────────────────────
+Public Sub PushToFirebase()
+    On Error GoTo ErrH
+    Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Dim wsPlog As Worksheet: Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+    Dim lastR As Long: lastR = GetLastRow(wsProd, PROD_COL_SN)
+    If lastR < PROD_DATA_START Then MsgBox "Production 데이터 없음.", vbInformation: Exit Sub
+
+    BuildProcCache
+
+    ' ── 엑셀 SN 목록 수집 (나중에 삭제 비교용) ──
+    Dim dictLocal As Object: Set dictLocal = CreateObject("Scripting.Dictionary")
+    dictLocal.CompareMode = vbTextCompare
+
+    Dim successCnt As Long, errCnt As Long
+    Dim r As Long
+
+    For r = PROD_DATA_START To lastR
+        Dim sn As String: sn = SafeStr(wsProd.Cells(r, PROD_COL_SN).Value)
+        If Trim(sn) = "" Then GoTo NextPush
+
+        ' ★ 로컬 SN 기록
+        If Not dictLocal.Exists(Trim(sn)) Then dictLocal.Add Trim(sn), True
+
+        Dim body As String
+        body = BuildFirebaseBody(wsProd, r, sn)
+
+        Dim url As String: url = BASE_URL & "production/" & EncodeUrl(sn)
+        Dim resp As String: resp = HttpRequest(url, "PATCH", body)
+
+        If Left(resp, 5) = "ERROR" Then
+            errCnt = errCnt + 1
+            Debug.Print "PUSH ERROR [" & sn & "]: " & Left(resp, 200)
+        Else
+            successCnt = successCnt + 1
+        End If
+
+        If (successCnt + errCnt) Mod 10 = 0 Then
+            Application.StatusBar = "Firebase 업로드... " & (successCnt + errCnt) & "/" & (lastR - PROD_DATA_START + 1)
+            DoEvents
+        End If
+NextPush:
+    Next r
+
+    ' ??????????????????????????????????????????
+    ' ★ Push 후 자동 삭제 동기화
+    '   Firebase에만 있고 엑셀에 없는 문서 삭제
+    ' ??????????????????????????????????????????
+    Application.StatusBar = "삭제 동기화 중..."
+    Dim delCount As Long: delCount = 0
+    delCount = SyncDeleteProduction(dictLocal)
+
+    Application.StatusBar = False
+    Dim msg As String
+    msg = Chr(9989) & " Firebase 업로드 완료!" & vbCrLf & _
+          "성공: " & successCnt & "건" & _
+          IIf(errCnt > 0, vbCrLf & "실패: " & errCnt & "건", "")
+    If delCount > 0 Then
+        msg = msg & vbCrLf & Chr(9888) & " 고아 문서 삭제: " & delCount & "건"
+    End If
+    MsgBox msg, vbInformation
+    Exit Sub
+ErrH:
+    Application.StatusBar = False
+    MsgBox "PushToFirebase 오류: " & Err.Description, vbCritical
+End Sub
+
+' ────────────────────────────────────────────
+'  [3] QuickPushSN
+' ────────────────────────────────────────────
+Public Sub QuickPushSN(sn As String)
+    On Error GoTo ErrH
+    Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Dim lastR As Long: lastR = GetLastRow(wsProd, PROD_COL_SN)
+    Dim r As Long, prdRow As Long: prdRow = 0
+
+    For r = PROD_DATA_START To lastR
+        If SafeStr(wsProd.Cells(r, PROD_COL_SN).Value) = sn Then
+            prdRow = r: Exit For
+        End If
+    Next r
+    If prdRow = 0 Then Exit Sub
+
+    ' ★ 캐시가 없으면 빌드
+    If Not IsCacheReady() Then BuildProcCache
+
+    Dim body As String
+    body = BuildFirebaseBody(wsProd, prdRow, sn)
+
+    Dim url As String: url = BASE_URL & "production/" & EncodeUrl(sn)
+    Dim resp As String: resp = HttpRequest(url, "PATCH", body)
+
+    If Left(resp, 5) = "ERROR" Then
+        Debug.Print "QuickPush ERROR [" & sn & "]: " & Left(resp, 200)
+    Else
+        Debug.Print "QuickPush OK [" & sn & "]"
+    End If
+    Exit Sub
+ErrH:
+    Debug.Print "QuickPushSN 오류: " & Err.Description
+End Sub
+
+' ────────────────────────────────────────────
+'  BuildFirebaseBody ★ 내장형 processes 맵 생성
+'  캐시 사용 → ProcLog 시트 접근 0회
+' ────────────────────────────────────────────
+Private Function BuildFirebaseBody(wsProd As Worksheet, prdRow As Long, sn As String) As String
+    Dim b As String
+    
+    b = "{""fields"":{"
+    
+    ' ── Production 기본 필드 ──
+    b = b & """batchId"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_BATCH).Value) & "},"
+    b = b & """sn"":{" & FsString(sn) & "},"
+    b = b & """category"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_TYPE).Value) & "},"
+    b = b & """productName"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_PRODUCT).Value) & "},"
+    b = b & """drawingNo"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_DRAWING).Value) & "},"
+    b = b & """shrinkage"":{" & FsNumber(wsProd.Cells(prdRow, PROD_COL_SHRINK).Value) & "},"
+    b = b & """stackCount"":{" & FsNumber(wsProd.Cells(prdRow, PROD_COL_STACK).Value) & "},"
+    b = b & """dcJoint"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_DC).Value) & "},"
+    b = b & """heatTreat"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_HEAT).Value) & "},"
+    b = b & """equipment"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_EQUIP).Value) & "},"
+    b = b & """currentProcess"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_PROCESS).Value) & "},"
+    b = b & """status"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_STATUS).Value) & "},"
+    b = b & """startDate"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_START).Value) & "},"
+    b = b & """endDate"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_END).Value) & "},"
+    b = b & """progress"":{" & FsNumber(wsProd.Cells(prdRow, PROD_COL_PROGRESS).Value) & "},"
+    b = b & """route"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_ROUTE).Value) & "},"
+    b = b & """sheetNo"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_SHEETNO).Value) & "},"
+    b = b & """registeredAt"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_REGDATE).Value) & "},"
+    b = b & """defectType"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_DEFECT).Value) & "},"
+    b = b & """defectProcess"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_DEFPROC).Value) & "},"
+    b = b & """dPlus"":{" & FsNumber(wsProd.Cells(prdRow, PROD_COL_DPLUS).Value) & "},"
+    
+    ' ── processes 맵 (내장형) ──
+    Dim procCount As Long: procCount = 0
+    Dim procMapBody As String: procMapBody = ""
+    
+    If IsCacheReady() Then
+        ' ★ 캐시에서 읽기
+        Dim allProcs As Collection
+        Set allProcs = GetCachedAllProcs(sn)
+        
+        Dim pi As Long
+        Dim procInfo As Object
+        
+        For pi = 1 To allProcs.count
+            Set procInfo = allProcs(pi)
+            
+            Dim pName As String: pName = CStr(procInfo("proc"))
+            If Trim(pName) = "" Then GoTo NextBuildProc
+            
+            procCount = procCount + 1
+            If procCount > 1 Then procMapBody = procMapBody & ","
+            
+            ' 공정 하나 = mapValue
+            procMapBody = procMapBody & """" & pName & """:{""mapValue"":{""fields"":{"
+            procMapBody = procMapBody & """order"":{" & FsNumber(procInfo("order")) & "},"
+            procMapBody = procMapBody & """equip"":{" & FsString(procInfo("equip")) & "},"
+            procMapBody = procMapBody & """status"":{" & FsString(procInfo("status")) & "},"
+            procMapBody = procMapBody & """startDate"":{" & FsString(procInfo("startDate")) & "},"
+            procMapBody = procMapBody & """planEnd"":{" & FsString(procInfo("planEnd")) & "},"
+            procMapBody = procMapBody & """actualEnd"":{" & FsString(procInfo("actualEnd")) & "},"
+            procMapBody = procMapBody & """planDays"":{" & FsNumber(procInfo("planDays")) & "},"
+            procMapBody = procMapBody & """actualDays"":{" & FsNumber(procInfo("actualDays")) & "},"
+            procMapBody = procMapBody & """defect"":{" & FsString(procInfo("defect")) & "},"
+            procMapBody = procMapBody & """remark"":{" & FsString(procInfo("remark")) & "}"
+            procMapBody = procMapBody & "}}}"
+NextBuildProc:
+        Next pi
+    Else
+        ' ★ fallback: ProcLog 시트 직접 읽기
+        Dim wsPlog As Worksheet: Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+        Dim plogLR As Long: plogLR = GetLastRow(wsPlog, PLOG_COL_LOGID)
+        Dim pr As Long
+        
+        If plogLR >= PLOG_DATA_START Then
+            For pr = PLOG_DATA_START To plogLR
+                If SafeStr(wsPlog.Cells(pr, PLOG_COL_SN).Value) = sn Then
+                    Dim fbProcName As String: fbProcName = SafeStr(wsPlog.Cells(pr, PLOG_COL_PROC).Value)
+                    If Trim(fbProcName) = "" Then GoTo NextFBProc
+                    
+                    procCount = procCount + 1
+                    If procCount > 1 Then procMapBody = procMapBody & ","
+                    
+                    procMapBody = procMapBody & """" & fbProcName & """:{""mapValue"":{""fields"":{"
+                    procMapBody = procMapBody & """order"":{" & FsNumber(wsPlog.Cells(pr, PLOG_COL_ORDER).Value) & "},"
+                    procMapBody = procMapBody & """equip"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_EQUIP).Value) & "},"
+                    procMapBody = procMapBody & """status"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_STATUS).Value) & "},"
+                    procMapBody = procMapBody & """startDate"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_SDATE).Value) & "},"
+                    procMapBody = procMapBody & """planEnd"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_PLANEND).Value) & "},"
+                    procMapBody = procMapBody & """actualEnd"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_ACTEND).Value) & "},"
+                    procMapBody = procMapBody & """planDays"":{" & FsNumber(wsPlog.Cells(pr, PLOG_COL_PLANDAYS).Value) & "},"
+                    procMapBody = procMapBody & """actualDays"":{" & FsNumber(wsPlog.Cells(pr, PLOG_COL_ACTDAYS).Value) & "},"
+                    procMapBody = procMapBody & """defect"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_DEFECT).Value) & "},"
+                    procMapBody = procMapBody & """remark"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_REMARK).Value) & "}"
+                    procMapBody = procMapBody & "}}}"
+NextFBProc:
+                End If
+            Next pr
+        End If
+    End If
+    
+    ' processes 맵 조립
+    b = b & """processes"":{""mapValue"":{""fields"":{"
+    b = b & procMapBody
+    b = b & "}}},"
+    
+    ' procCount
+    b = b & """procCount"":{" & FsNumber(procCount) & "}"
+    b = b & "}}"
+    
+    BuildFirebaseBody = b
+End Function
+
+' ────────────────────────────────────────────
+'  [4] SyncAfterEdit
+' ────────────────────────────────────────────
+Public Sub SyncAfterEdit(dictChecked As Object)
+    On Error Resume Next
+    If dictChecked Is Nothing Then Exit Sub
+    Dim k As Variant
+    Dim cnt As Long: cnt = 0
+    For Each k In dictChecked.keys
+        If dictChecked(k) = True Then
+            QuickPushSN CStr(k)
+            cnt = cnt + 1
+        End If
+    Next k
+    Application.StatusBar = "Firebase 동기화 " & cnt & "건 완료"
+    DoEvents
+    Application.StatusBar = False
+    On Error GoTo 0
+End Sub
+
+' ────────────────────────────────────────────
+'  [5] SyncAfterScrap
+' ────────────────────────────────────────────
+Public Sub SyncAfterScrap(dictChecked As Object)
+    SyncAfterEdit dictChecked
+End Sub
+
+' ────────────────────────────────────────────
+'  [6] PullFromFirebase ? Firebase → 엑셀 동기화
+'      ★ 엑셀이 마스터: 엑셀에 없는 SN은 Firebase에서 삭제
+' ────────────────────────────────────────────
+Public Sub PullFromFirebase()
+    On Error GoTo ErrH
+    Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Dim wsPlog As Worksheet: Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+
+    Application.StatusBar = "Firebase에서 데이터 가져오는 중..."
+    Application.ScreenUpdating = False
+
+    ' ── 1단계: 엑셀 SN 목록 수집 ──
+    Dim dictExcel As Object: Set dictExcel = CreateObject("Scripting.Dictionary")
+    Dim exLR As Long: exLR = GetLastRow(wsProd, PROD_COL_SN)
+    Dim ex As Long
+    For ex = PROD_DATA_START To exLR
+        Dim exSN As String: exSN = Trim(SafeStr(wsProd.Cells(ex, PROD_COL_SN).Value))
+        If exSN <> "" Then dictExcel(exSN) = True
+    Next ex
+
+    ' ── 2단계: Firebase 전체 문서 페이징 수집 ──
+    Dim allDocs As Collection: Set allDocs = New Collection
+    Dim allSNs As Collection: Set allSNs = New Collection
+    Dim nextToken As String: nextToken = ""
+    Dim pageNum As Long: pageNum = 0
+
+    Do
+        Dim apiUrl As String
+        apiUrl = BASE_URL & "production?pageSize=300"
+        If nextToken <> "" Then apiUrl = apiUrl & "&pageToken=" & nextToken
+
+        Dim resp As String
+        resp = HttpRequest(apiUrl, "GET")
+        If Left(resp, 5) = "ERROR" Then
+            MsgBox "Firebase 연결 실패: " & Left(resp, 100), vbCritical
+            GoTo CleanUp
+        End If
+
+        pageNum = pageNum + 1
+        Application.StatusBar = "Firebase 페이지 " & pageNum & " 로딩..."
+
+        Dim searchPos As Long: searchPos = 1
+        Do
+            Dim docStart As Long
+            docStart = InStr(searchPos, resp, """fields"":")
+            If docStart = 0 Then Exit Do
+
+            Dim docEnd As Long
+            docEnd = FindDocEnd(resp, docStart)
+            Dim docJson As String: docJson = Mid(resp, docStart, docEnd - docStart)
+
+            Dim docSN As String: docSN = ExtractField(docJson, "sn")
+            allDocs.Add docJson
+            allSNs.Add docSN
+            searchPos = docEnd + 1
+        Loop
+
+        nextToken = ""
+        Dim tokenPos As Long
+        tokenPos = InStr(resp, """nextPageToken""")
+        If tokenPos > 0 Then
+            Dim tStart As Long: tStart = InStr(tokenPos, resp, ": """) + 3
+            Dim tEnd As Long: tEnd = InStr(tStart, resp, """")
+            If tEnd > tStart Then nextToken = Mid(resp, tStart, tEnd - tStart)
+        End If
+    Loop While nextToken <> ""
+
+    Application.StatusBar = "총 " & allDocs.count & "건 로드. 처리 중..."
+
+    ' ── 3단계: 엑셀에 있는 SN만 업데이트 / 없는 SN은 삭제 ──
+    Dim updProd As Long, updPlog As Long
+    Dim delCount As Long, delFail As Long
+    Dim delList As String: delList = ""
+    Dim di As Long
+
+    For di = 1 To allDocs.count
+        Dim dJson As String: dJson = allDocs(di)
+        Dim sn As String: sn = Trim(allSNs(di))
+        If sn = "" Then GoTo NextPullDoc
+
+        ' ── 엑셀에 없는 SN → Firebase에서 삭제 ──
+        If Not dictExcel.Exists(sn) Then
+            Dim delUrl As String
+            delUrl = BASE_URL & "production/" & EncodeUrl(sn)
+            Dim delResp As String
+            delResp = HttpRequest(delUrl, "DELETE")
+            If Left(delResp, 5) <> "ERROR" Then
+                delCount = delCount + 1
+                If delCount <= 15 Then delList = delList & vbCrLf & "  " & sn
+            Else
+                delFail = delFail + 1
+            End If
+            GoTo NextPullDoc
+        End If
+
+        ' ── Production 시트 업데이트 ──
+        Dim prodLR As Long: prodLR = GetLastRow(wsProd, PROD_COL_SN)
+        Dim pr As Long, prdRow As Long: prdRow = 0
+        For pr = PROD_DATA_START To prodLR
+            If SafeStr(wsProd.Cells(pr, PROD_COL_SN).Value) = sn Then
+                prdRow = pr: Exit For
+            End If
+        Next pr
+        If prdRow = 0 Then GoTo NextPullDoc
+
+        wsProd.Cells(prdRow, PROD_COL_PROCESS).Value = ExtractField(dJson, "currentProcess")
+        wsProd.Cells(prdRow, PROD_COL_STATUS).Value = ExtractField(dJson, "status")
+        wsProd.Cells(prdRow, PROD_COL_EQUIP).Value = ExtractField(dJson, "equipment")
+        wsProd.Cells(prdRow, PROD_COL_START).Value = ExtractField(dJson, "startDate")
+        wsProd.Cells(prdRow, PROD_COL_END).Value = ExtractField(dJson, "endDate")
+        wsProd.Cells(prdRow, PROD_COL_PROGRESS).Value = val(ExtractField(dJson, "progress"))
+        wsProd.Cells(prdRow, PROD_COL_DPLUS).Value = val(ExtractField(dJson, "dPlus"))
+        wsProd.Cells(prdRow, PROD_COL_DEFECT).Value = ExtractField(dJson, "defectType")
+        wsProd.Cells(prdRow, PROD_COL_DEFPROC).Value = ExtractField(dJson, "defectProcess")
+        On Error Resume Next
+        FormatProductionRow wsProd, prdRow
+        On Error GoTo ErrH
+        updProd = updProd + 1
+
+        ' ── ProcLog 업데이트: processes 맵에서 추출 ──
+        Dim procSection As String
+        Dim procStart As Long
+        procStart = InStr(dJson, """processes""")
+        
+        If procStart > 0 Then
+            ' processes 맵 안의 각 공정 파싱
+            Dim procNames As Variant
+            procNames = Array(PROC_DEGREASING, PROC_SINTERING, PROC_REDUCTION, _
+                              PROC_FLATTENING, PROC_PLATING, PROC_HEATTREAT)
+            
+            Dim pni As Long
+            For pni = 0 To UBound(procNames)
+                Dim pn As String: pn = CStr(procNames(pni))
+                Dim pnPos As Long
+                pnPos = InStr(procStart, dJson, """" & pn & """")
+                If pnPos = 0 Then GoTo NextPullProc
+                
+                ' 이 공정의 맵 범위 추출
+                Dim pnFieldsStart As Long
+                pnFieldsStart = InStr(pnPos, dJson, """fields"":")
+                If pnFieldsStart = 0 Then GoTo NextPullProc
+                
+                Dim pnEnd As Long
+                pnEnd = FindDocEnd(dJson, pnFieldsStart)
+                Dim pnJson As String
+                pnJson = Mid(dJson, pnFieldsStart, pnEnd - pnFieldsStart)
+                
+                ' ProcLog에서 해당 행 찾기
+                Dim plogLR2 As Long: plogLR2 = GetLastRow(wsPlog, PLOG_COL_LOGID)
+                Dim plr As Long, plogRow As Long: plogRow = 0
+                For plr = PLOG_DATA_START To plogLR2
+                    If SafeStr(wsPlog.Cells(plr, PLOG_COL_SN).Value) = sn And _
+                       SafeStr(wsPlog.Cells(plr, PLOG_COL_PROC).Value) = pn Then
+                        plogRow = plr: Exit For
+                    End If
+                Next plr
+                
+                If plogRow = 0 Then
+                    plogRow = plogLR2 + 1
+                    wsPlog.Cells(plogRow, PLOG_COL_LOGID).Value = sn & "_" & pn
+                    wsPlog.Cells(plogRow, PLOG_COL_SN).Value = sn
+                    wsPlog.Cells(plogRow, PLOG_COL_PROC).Value = pn
+                End If
+                
+                wsPlog.Cells(plogRow, PLOG_COL_ORDER).Value = val(ExtractField(pnJson, "order"))
+                wsPlog.Cells(plogRow, PLOG_COL_EQUIP).Value = ExtractField(pnJson, "equip")
+                wsPlog.Cells(plogRow, PLOG_COL_STATUS).Value = ExtractField(pnJson, "status")
+                wsPlog.Cells(plogRow, PLOG_COL_SDATE).Value = ExtractField(pnJson, "startDate")
+                wsPlog.Cells(plogRow, PLOG_COL_PLANEND).Value = ExtractField(pnJson, "planEnd")
+                wsPlog.Cells(plogRow, PLOG_COL_ACTEND).Value = ExtractField(pnJson, "actualEnd")
+                wsPlog.Cells(plogRow, PLOG_COL_PLANDAYS).Value = val(ExtractField(pnJson, "planDays"))
+                wsPlog.Cells(plogRow, PLOG_COL_ACTDAYS).Value = val(ExtractField(pnJson, "actualDays"))
+                wsPlog.Cells(plogRow, PLOG_COL_DEFECT).Value = ExtractField(pnJson, "defect")
+                wsPlog.Cells(plogRow, PLOG_COL_REMARK).Value = ExtractField(pnJson, "remark")
+                wsPlog.Cells(plogRow, PLOG_COL_LOGTIME).Value = Now()
+                updPlog = updPlog + 1
+NextPullProc:
+            Next pni
+        End If
+
+        If di Mod 20 = 0 Then
+            Application.StatusBar = "엑셀 반영 중... " & di & "/" & allDocs.count
+            DoEvents
+        End If
+NextPullDoc:
+    Next di
+
+CleanUp:
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+
+    Dim msg As String
+    msg = Chr(9989) & " Firebase → 엑셀 동기화 완료!" & vbCrLf & vbCrLf & _
+          "Production 업데이트: " & updProd & "건" & vbCrLf & _
+          "ProcLog 업데이트: " & updPlog & "건"
+    If delCount > 0 Then
+        msg = msg & vbCrLf & vbCrLf & Chr(9888) & " 고아 문서 삭제: " & delCount & "건" & delList
+        If delCount > 15 Then msg = msg & vbCrLf & "  ... 외 " & (delCount - 15) & "건"
+    End If
+    If delFail > 0 Then msg = msg & vbCrLf & "삭제 실패: " & delFail & "건"
+    MsgBox msg, vbInformation
+
+    ' 캐시 무효화 (ProcLog 변경됐으므로)
+    InvalidateCache
+    On Error Resume Next
+    RefreshWorkSpace
+    On Error GoTo 0
+    Exit Sub
+ErrH:
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+    MsgBox "PullFromFirebase 오류: " & Err.Description, vbCritical
+End Sub
+
+' ────────────────────────────────────────────
+'  [7] ClearFirebaseProduction ? 전체 삭제
+' ────────────────────────────────────────────
+Public Sub ClearFirebaseProduction()
+    If MsgBox("Firebase production 컬렉션의 모든 문서를 삭제합니다." & vbCrLf & _
+              "이 작업은 되돌릴 수 없습니다. 진행하시겠습니까?", _
+              vbExclamation + vbYesNo) = vbNo Then Exit Sub
+
+    Application.StatusBar = "Firebase 전체 삭제 중..."
+    Dim totalDel As Long
+    Dim nextToken As String: nextToken = ""
+
+    Do
+        Dim apiUrl As String
+        apiUrl = BASE_URL & "production?pageSize=300"
+        If nextToken <> "" Then apiUrl = apiUrl & "&pageToken=" & nextToken
+
+        Dim resp As String
+        resp = HttpRequest(apiUrl, "GET")
+        If Left(resp, 5) = "ERROR" Then
+            MsgBox "Firebase 조회 실패: " & Left(resp, 100), vbCritical
+            Application.StatusBar = False
+            Exit Sub
+        End If
+
+        Dim foundAny As Boolean: foundAny = False
+        Dim searchPos As Long: searchPos = 1
+
+        Do
+            Dim namePos As Long
+            namePos = InStr(searchPos, resp, """name"": ""projects/")
+            If namePos = 0 Then Exit Do
+            foundAny = True
+
+            Dim snStart As Long
+            snStart = InStr(namePos, resp, "production/")
+            If snStart = 0 Then Exit Do
+            snStart = snStart + Len("production/")
+            Dim snEnd As Long: snEnd = InStr(snStart, resp, """")
+            Dim docID As String: docID = Mid(resp, snStart, snEnd - snStart)
+
+            Dim delUrl As String
+            delUrl = BASE_URL & "production/" & EncodeUrl(docID)
+            HttpRequest delUrl, "DELETE"
+            totalDel = totalDel + 1
+
+            If totalDel Mod 10 = 0 Then
+                Application.StatusBar = "삭제 중... " & totalDel & "건"
+                DoEvents
+            End If
+
+            searchPos = snEnd + 1
+        Loop
+
+        nextToken = ""
+        Dim tokenPos As Long
+        tokenPos = InStr(resp, """nextPageToken""")
+        If tokenPos > 0 Then
+            Dim tStart As Long: tStart = InStr(tokenPos, resp, ": """) + 3
+            Dim tEnd As Long: tEnd = InStr(tStart, resp, """")
+            If tEnd > tStart Then nextToken = Mid(resp, tStart, tEnd - tStart)
+        End If
+
+        If Not foundAny Then Exit Do
+    Loop While nextToken <> ""
+
+    Application.StatusBar = False
+    MsgBox Chr(9989) & " Firebase 전체 삭제 완료: " & totalDel & "건", vbInformation
+End Sub
+
+' ────────────────────────────────────────────
+'  [8] CleanupFirebase ? 독립 실행: 엑셀에 없는 것만 삭제
+' ────────────────────────────────────────────
+Public Sub CleanupFirebase()
+    On Error GoTo ErrH
+    Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+
+    Dim dictExcel As Object: Set dictExcel = CreateObject("Scripting.Dictionary")
+    Dim exLR As Long: exLR = GetLastRow(wsProd, PROD_COL_SN)
+    Dim ex As Long
+    For ex = PROD_DATA_START To exLR
+        Dim exSN As String: exSN = Trim(SafeStr(wsProd.Cells(ex, PROD_COL_SN).Value))
+        If exSN <> "" Then dictExcel(exSN) = True
+    Next ex
+
+    Application.StatusBar = "Firebase 문서 스캔 중..."
+
+    Dim fbSNs As Collection: Set fbSNs = New Collection
+    Dim nextToken As String: nextToken = ""
+
+    Do
+        Dim apiUrl As String
+        apiUrl = BASE_URL & "production?pageSize=300"
+        If nextToken <> "" Then apiUrl = apiUrl & "&pageToken=" & nextToken
+
+        Dim resp As String
+        resp = HttpRequest(apiUrl, "GET")
+        If Left(resp, 5) = "ERROR" Then
+            MsgBox "Firebase 연결 실패: " & Left(resp, 100), vbCritical
+            Application.StatusBar = False
+            Exit Sub
+        End If
+
+        Dim searchPos As Long: searchPos = 1
+        Do
+            Dim docStart As Long
+            docStart = InStr(searchPos, resp, """fields"":")
+            If docStart = 0 Then Exit Do
+
+            Dim docEnd As Long
+            docEnd = FindDocEnd(resp, docStart)
+            Dim docJson As String: docJson = Mid(resp, docStart, docEnd - docStart)
+            Dim docSN As String: docSN = ExtractField(docJson, "sn")
+            If Trim(docSN) <> "" Then fbSNs.Add docSN
+            searchPos = docEnd + 1
+        Loop
+
+        nextToken = ""
+        Dim tokenPos As Long
+        tokenPos = InStr(resp, """nextPageToken""")
+        If tokenPos > 0 Then
+            Dim tStart As Long: tStart = InStr(tokenPos, resp, ": """) + 3
+            Dim tEnd As Long: tEnd = InStr(tStart, resp, """")
+            If tEnd > tStart Then nextToken = Mid(resp, tStart, tEnd - tStart)
+        End If
+    Loop While nextToken <> ""
+
+    Dim toDelete As Collection: Set toDelete = New Collection
+    Dim fi As Long
+    For fi = 1 To fbSNs.count
+        Dim chkSN As String: chkSN = Trim(fbSNs(fi))
+        If chkSN <> "" Then
+            If Not dictExcel.Exists(chkSN) Then
+                toDelete.Add chkSN
+            End If
+        End If
+    Next fi
+
+    If toDelete.count = 0 Then
+        MsgBox Chr(9989) & " 삭제할 고아 문서가 없습니다." & vbCrLf & _
+               "Firebase: " & fbSNs.count & "건 / 엑셀: " & dictExcel.count & "건" & vbCrLf & _
+               "모두 일치합니다.", vbInformation
+        Application.StatusBar = False
+        Exit Sub
+    End If
+
+    Dim preview As String: preview = ""
+    Dim pi As Long
+    For pi = 1 To WorksheetFunction.Min(toDelete.count, 15)
+        preview = preview & vbCrLf & "  " & toDelete(pi)
+    Next pi
+    If toDelete.count > 15 Then preview = preview & vbCrLf & "  ... 외 " & (toDelete.count - 15) & "건"
+
+    If MsgBox("Firebase에 있지만 엑셀에 없는 문서 " & toDelete.count & "건을 삭제합니다." & vbCrLf & _
+              vbCrLf & "삭제 대상:" & preview & vbCrLf & vbCrLf & _
+              "진행하시겠습니까?", vbExclamation + vbYesNo) = vbNo Then
+        Application.StatusBar = False
+        Exit Sub
+    End If
+
+    Dim delCount As Long, delFailCnt As Long
+    For pi = 1 To toDelete.count
+        Dim delUrl As String
+        delUrl = BASE_URL & "production/" & EncodeUrl(toDelete(pi))
+        Dim delResp As String
+        delResp = HttpRequest(delUrl, "DELETE")
+        If Left(delResp, 5) <> "ERROR" Then
+            delCount = delCount + 1
+        Else
+            delFailCnt = delFailCnt + 1
+            Debug.Print "DELETE FAIL [" & toDelete(pi) & "]: " & Left(delResp, 100)
+        End If
+        If (delCount + delFailCnt) Mod 5 = 0 Then
+            Application.StatusBar = "삭제 중... " & (delCount + delFailCnt) & "/" & toDelete.count
+            DoEvents
+        End If
+    Next pi
+
+    Application.StatusBar = False
+    MsgBox Chr(9989) & " Firebase 고아 문서 삭제 완료!" & vbCrLf & _
+           "삭제 성공: " & delCount & "건" & vbCrLf & _
+           IIf(delFailCnt > 0, "삭제 실패: " & delFailCnt & "건", ""), vbInformation
+    Exit Sub
+ErrH:
+    Application.StatusBar = False
+    MsgBox "CleanupFirebase 오류: " & Err.Description, vbCritical
+End Sub
+
+' ────────────────────────────────────────────
+'  JSON 파싱 헬퍼
+' ────────────────────────────────────────────
+Private Function ExtractField(json As String, fieldName As String) As String
+    Dim search As String: search = """" & fieldName & """"
+    Dim pos As Long: pos = InStr(json, search)
+    If pos = 0 Then ExtractField = "": Exit Function
+
+    Dim svPos As Long: svPos = InStr(pos, json, """stringValue""")
+    Dim ivPos As Long: ivPos = InStr(pos, json, """integerValue""")
+    Dim dvPos As Long: dvPos = InStr(pos, json, """doubleValue""")
+
+    Dim usePos As Long: usePos = 0
+    If svPos > 0 And svPos < pos + 200 Then usePos = svPos
+    If ivPos > 0 And ivPos < pos + 200 And (usePos = 0 Or ivPos < usePos) Then usePos = ivPos
+    If dvPos > 0 And dvPos < pos + 200 And (usePos = 0 Or dvPos < usePos) Then usePos = dvPos
+
+    If usePos = 0 Then ExtractField = "": Exit Function
+
+    Dim colonPos As Long: colonPos = InStr(usePos, json, ":")
+    If colonPos = 0 Then ExtractField = "": Exit Function
+
+    Dim afterColon As String: afterColon = Trim(Mid(json, colonPos + 1, 100))
+
+    If Left(afterColon, 1) = """" Then
+        Dim qEnd As Long: qEnd = InStr(2, afterColon, """")
+        If qEnd > 0 Then ExtractField = Mid(afterColon, 2, qEnd - 2) Else ExtractField = ""
+    Else
+        Dim endChars As String: endChars = ",}" & vbCrLf & vbLf
+        Dim ei As Long
+        For ei = 1 To Len(afterColon)
+            If InStr(endChars, Mid(afterColon, ei, 1)) > 0 Then
+                ExtractField = Trim(Left(afterColon, ei - 1))
+                Exit Function
+            End If
+        Next ei
+        ExtractField = Trim(afterColon)
+    End If
+End Function
+
+Private Function FindDocEnd(json As String, startPos As Long) As Long
+    Dim depth As Long: depth = 0
+    Dim i As Long
+    Dim inString As Boolean: inString = False
+    Dim c As String
+    Dim prevC As String
+
+    For i = startPos To Len(json)
+        c = Mid(json, i, 1)
+        If i > 1 Then prevC = Mid(json, i - 1, 1) Else prevC = ""
+
+        If c = Chr(34) And prevC <> "\" Then inString = Not inString
+
+        If Not inString Then
+            If c = "{" Then depth = depth + 1
+            If c = "}" Then
+                depth = depth - 1
+                If depth = 0 Then
+                    FindDocEnd = i + 1
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+    FindDocEnd = Len(json)
+End Function
+
+'??????????????????????????????????????????????????????????
+'  SyncDeleteProduction (내부 함수)
+'  dictLocal = 엑셀 Production의 SN Dictionary
+'  Firebase production 컬렉션에서 엑셀에 없는 문서를 삭제
+'  반환: 삭제 건수
+'??????????????????????????????????????????????????????????
+Private Function SyncDeleteProduction(dictLocal As Object) As Long
+    Dim delCount As Long: delCount = 0
+    Dim nextToken As String: nextToken = ""
+    
+    Do
+        Dim apiUrl As String
+        apiUrl = BASE_URL & "production?pageSize=300"
+        If nextToken <> "" Then apiUrl = apiUrl & "&pageToken=" & EncodeUrl(nextToken)
+        
+        Dim resp As String
+        resp = HttpRequest(apiUrl, "GET")
+        If Left(resp, 5) = "ERROR" Or InStr(resp, """documents""") = 0 Then Exit Do
+        
+        ' ── 문서별 순회 ──
+        Dim searchPos As Long: searchPos = 1
+        Do
+            ' name 필드에서 문서 ID 추출
+            Dim namePos As Long
+            namePos = InStr(searchPos, resp, """name""")
+            If namePos = 0 Then Exit Do
+            
+            ' "production/" 뒤의 docID 추출
+            Dim prodPos As Long
+            prodPos = InStr(namePos, resp, "production/")
+            If prodPos = 0 Then Exit Do
+            prodPos = prodPos + Len("production/")
+            
+            Dim idEnd As Long
+            idEnd = InStr(prodPos, resp, """")
+            If idEnd = 0 Then Exit Do
+            
+            Dim docID As String
+            docID = Mid(resp, prodPos, idEnd - prodPos)
+            searchPos = idEnd + 1
+            
+            ' ── 해당 문서의 sn 필드 추출 ──
+            Dim docSN As String: docSN = ""
+            Dim snPos As Long
+            snPos = InStr(searchPos, resp, """sn""")
+            If snPos > 0 And snPos < searchPos + 3000 Then
+                Dim svPos As Long
+                svPos = InStr(snPos, resp, """stringValue""")
+                If svPos > 0 And svPos < snPos + 200 Then
+                    Dim qS As Long: qS = InStr(svPos + 13, resp, """")
+                    If qS > 0 Then
+                        qS = qS + 1
+                        Dim qE As Long: qE = InStr(qS, resp, """")
+                        If qE > 0 Then docSN = Mid(resp, qS, qE - qS)
+                    End If
+                End If
+            End If
+            
+            ' sn을 못 찾으면 docID를 sn으로 간주 (문서 ID = SN인 구조)
+            If Trim(docSN) = "" Then docSN = docID
+            
+            ' ── 엑셀에 없으면 삭제 ──
+            If Not dictLocal.Exists(Trim(docSN)) Then
+                Dim delUrl As String
+                delUrl = BASE_URL & "production/" & EncodeUrl(docID)
+                Dim delResp As String
+                delResp = HttpRequest(delUrl, "DELETE")
+                If Left(delResp, 5) <> "ERROR" Then
+                    delCount = delCount + 1
+                    Debug.Print "DEL OK: " & docSN
+                Else
+                    Debug.Print "DEL FAIL: " & docSN & " → " & Left(delResp, 100)
+                End If
+                
+                If delCount Mod 5 = 0 Then
+                    Application.StatusBar = "고아 문서 삭제 중... " & delCount & "건"
+                    DoEvents
+                End If
+            End If
+        Loop
+        
+        ' ── 페이지네이션 ──
+        nextToken = ""
+        Dim tokenPos As Long
+        tokenPos = InStr(resp, """nextPageToken""")
+        If tokenPos > 0 Then
+            Dim tStart As Long: tStart = InStr(tokenPos, resp, ": """) + 3
+            Dim tEnd As Long: tEnd = InStr(tStart, resp, """")
+            If tEnd > tStart Then nextToken = Mid(resp, tStart, tEnd - tStart)
+        End If
+    Loop While nextToken <> ""
+    
+    SyncDeleteProduction = delCount
+End Function
+
+'??????????????????????????????????????????????????????????
+'  DeleteSNFromFirebase ? 특정 SN 하나를 Firebase에서 삭제
+'  행 삭제 직후 호출용
+'??????????????????????????????????????????????????????????
+Public Sub DeleteSNFromFirebase(sn As String)
+    On Error Resume Next
+    If Trim(sn) = "" Then Exit Sub
+    
+    Dim url As String
+    url = BASE_URL & "production/" & EncodeUrl(Trim(sn))
+    
+    Dim resp As String
+    resp = HttpRequest(url, "DELETE")
+    
+    If Left(resp, 5) <> "ERROR" Then
+        Debug.Print "Firebase DEL OK: " & sn
+    Else
+        Debug.Print "Firebase DEL FAIL: " & sn & " → " & Left(resp, 100)
+    End If
+    On Error GoTo 0
+End Sub
+
+'??????????????????????????????????????????????????????????
+'  FirebasePushWithSync
+'  사이드바 Push 버튼 → 엑셀 → Firebase (추가/수정 + 삭제)
+'??????????????????????????????????????????????????????????
+Public Sub FirebasePushWithSync()
+    Dim answer As VbMsgBoxResult
+    answer = MsgBox("엑셀 데이터를 Firebase에 업로드합니다." & vbCrLf & _
+                    "(삭제된 항목도 Firebase에서 제거됩니다)" & vbCrLf & vbCrLf & _
+                    "진행하시겠습니까?", vbQuestion + vbYesNo, "Push to Firebase")
+    If answer = vbNo Then Exit Sub
+    
+    PushToFirebase
+End Sub
+
+'??????????????????????????????????????????????????????????
+'  FirebasePullWithSync
+'  사이드바 Pull 버튼 → Firebase → 엑셀
+'??????????????????????????????????????????????????????????
+Public Sub FirebasePullWithSync()
+    Dim answer As VbMsgBoxResult
+    answer = MsgBox("Firebase 데이터를 엑셀로 가져옵니다." & vbCrLf & _
+                    "(엑셀이 마스터: 엑셀에 없는 Firebase 문서는 삭제됩니다)" & vbCrLf & vbCrLf & _
+                    "진행하시겠습니까?", vbQuestion + vbYesNo, "Pull from Firebase")
+    If answer = vbNo Then Exit Sub
+    
+    PullFromFirebase
+    
+    ' Pull 후 Work Space 새로고침
+    On Error Resume Next
+    RefreshWorkSpace
+    On Error GoTo 0
+End Sub
+

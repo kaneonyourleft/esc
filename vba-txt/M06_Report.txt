@@ -1,0 +1,677 @@
+﻿Attribute VB_Name = "M06_Report"
+'================================================================
+' M07_Report - ESC Daily Production Report (A4)
+'================================================================
+Option Explicit
+
+Private Const RPT_FONT      As String = "맑은 고딕"
+Private Const RPT_COL_START As Long = 3    'C열
+Private Const RPT_COL_END   As Long = 10   'J열
+Private Const RPT_ROW_START As Long = 6
+
+Public Sub GenerateDailyReport()
+    On Error GoTo ErrH
+    
+    Dim wsRpt As Worksheet:  Set wsRpt = ThisWorkbook.sheets(SHT_REPORT)
+    Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Dim wsLog As Worksheet:  Set wsLog = ThisWorkbook.sheets(SHT_PROCLOG)
+    Dim wsCal As Worksheet:  Set wsCal = ThisWorkbook.sheets(SHT_CALENDAR)
+    
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+    '── 출력 영역 초기화 (C6 ~ J200) ──
+    With wsRpt.Range(wsRpt.Cells(RPT_ROW_START, RPT_COL_START), _
+                     wsRpt.Cells(200, RPT_COL_END))
+        .ClearContents
+        .ClearFormats
+        .Font.Name = RPT_FONT
+        .Font.Size = 9
+        .Font.Color = RGB(40, 40, 40)
+        .Interior.Color = RGB(255, 255, 255)
+        .Borders.lineStyle = xlNone
+    End With
+    
+    '── A4 페이지 설정 ──
+    With wsRpt.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .LeftMargin = Application.CentimetersToPoints(1.5)
+        .RightMargin = Application.CentimetersToPoints(1.5)
+        .TopMargin = Application.CentimetersToPoints(1.5)
+        .BottomMargin = Application.CentimetersToPoints(1.5)
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .CenterHorizontally = True
+    End With
+    
+    '── 열 너비 설정 (사이드바 A-B는 건드리지 않음) ──
+    wsRpt.Columns("C").ColumnWidth = 4     '번호
+    wsRpt.Columns("D").ColumnWidth = 12    '공정/제품
+    wsRpt.Columns("E").ColumnWidth = 26    'S/N
+    wsRpt.Columns("F").ColumnWidth = 12    '설비/이슈
+    wsRpt.Columns("G").ColumnWidth = 8     '매수
+    wsRpt.Columns("H").ColumnWidth = 8     '상태
+    wsRpt.Columns("I").ColumnWidth = 10    '시간/구분
+    wsRpt.Columns("J").ColumnWidth = 20    '비고
+    
+    Dim curRow As Long: curRow = RPT_ROW_START
+    Dim todayDate As Date: todayDate = Date
+    
+    '??????????????????????????????????????????
+    ' 헤더
+    '??????????????????????????????????????????
+    wsRpt.Range(wsRpt.Cells(curRow, RPT_COL_START), _
+                wsRpt.Cells(curRow, RPT_COL_END)).Merge
+    With wsRpt.Cells(curRow, RPT_COL_START)
+        .Value = "ESC Production Daily Report"
+        .Font.Size = 20
+        .Font.Bold = True
+        .Font.Color = RGB(20, 20, 20)
+        .HorizontalAlignment = xlCenter
+    End With
+    curRow = curRow + 1
+    
+    wsRpt.Range(wsRpt.Cells(curRow, RPT_COL_START), _
+                wsRpt.Cells(curRow, RPT_COL_END)).Merge
+    With wsRpt.Cells(curRow, RPT_COL_START)
+        .Value = Format(todayDate, "YYYY-MM-DD") & " (" & GetDowKor(todayDate) & ")  |  일일 생산 보고서"
+        .Font.Size = 11
+        .Font.Color = RGB(100, 100, 100)
+        .HorizontalAlignment = xlCenter
+    End With
+    curRow = curRow + 1
+    
+    DrawLine wsRpt, curRow, RGB(40, 40, 40)
+    curRow = curRow + 1
+    
+    '??????????????????????????????????????????
+    ' [1] 금일 생산 현황
+    '??????????????????????????????????????????
+    WriteSection wsRpt, curRow, "[1] 금일 생산 현황"
+    curRow = curRow + 1
+    
+    WriteHeader wsRpt, curRow, Array("No", "공정", "S/N", "설비", "제품", "매수", "상태", "비고")
+    curRow = curRow + 1
+    
+    Dim lastProd As Long: lastProd = GetLastRow(wsProd, PROD_COL_SN)
+    Dim prodDedup As Object: Set prodDedup = CreateObject("Scripting.Dictionary")
+    Dim progCnt As Long, doneCnt As Long, waitCnt As Long, delayCnt As Long
+    Dim itemNo As Long: itemNo = 0
+    Dim r As Long
+    
+    If lastProd >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastProd
+            Dim pSN As String: pSN = SafeStr(wsProd.Cells(r, PROD_COL_SN).Value)
+            Dim pProc As String: pProc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            Dim pStat As String: pStat = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            Dim pProd As String: pProd = SafeStr(wsProd.Cells(r, PROD_COL_PRODUCT).Value)
+            Dim pEquip As String: pEquip = SafeStr(wsProd.Cells(r, PROD_COL_EQUIP).Value)
+            Dim pBatch As String: pBatch = SafeStr(wsProd.Cells(r, PROD_COL_BATCH).Value)
+            
+            If Len(pSN) = 0 Then GoTo nxtProd
+            
+            Dim pStart As Variant: pStart = wsProd.Cells(r, PROD_COL_START).Value
+            Dim pEnd As Variant: pEnd = wsProd.Cells(r, PROD_COL_END).Value
+            Dim isToday As Boolean: isToday = False
+            
+            If SafeIsDate(pStart) Then
+                If CDate(pStart) = todayDate Then isToday = True
+            End If
+            If SafeIsDate(pEnd) Then
+                If CDate(pEnd) = todayDate Then isToday = True
+            End If
+            If pStat = ST_PROG Then isToday = True
+            
+            If Not isToday Then GoTo nxtProd
+            
+            Dim pKey As String: pKey = pSN & "|" & pProc
+            If prodDedup.Exists(pKey) Then GoTo nxtProd
+            prodDedup(pKey) = True
+            
+            itemNo = itemNo + 1
+            wsRpt.Cells(curRow, RPT_COL_START).Value = itemNo
+            wsRpt.Cells(curRow, RPT_COL_START + 1).Value = pProc
+            wsRpt.Cells(curRow, RPT_COL_START + 2).Value = pSN
+            wsRpt.Cells(curRow, RPT_COL_START + 3).Value = pEquip
+            wsRpt.Cells(curRow, RPT_COL_START + 4).Value = pProd
+            wsRpt.Cells(curRow, RPT_COL_START + 5).Value = SafeStr(wsProd.Cells(r, PROD_COL_SHEETNO).Value)
+            wsRpt.Cells(curRow, RPT_COL_START + 6).Value = pStat
+            wsRpt.Cells(curRow, RPT_COL_START + 7).Value = SafeStr(wsProd.Cells(r, PROD_COL_INSP_MEMO).Value)
+            
+            ColorStatus wsRpt, curRow, RPT_COL_START + 6, pStat
+            StyleDataRow wsRpt, curRow
+            curRow = curRow + 1
+            
+            Select Case pStat
+                Case ST_PROG:  progCnt = progCnt + 1
+                Case ST_DONE:  doneCnt = doneCnt + 1
+                Case ST_WAIT:  waitCnt = waitCnt + 1
+                Case ST_DELAY: delayCnt = delayCnt + 1
+            End Select
+nxtProd:
+        Next r
+    End If
+    
+    If itemNo = 0 Then
+        wsRpt.Cells(curRow, RPT_COL_START).Value = "(금일 생산 데이터 없음)"
+        wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(150, 150, 150)
+        curRow = curRow + 1
+    End If
+    
+    '소계
+    wsRpt.Range(wsRpt.Cells(curRow, RPT_COL_START), _
+                wsRpt.Cells(curRow, RPT_COL_END)).Merge
+    wsRpt.Cells(curRow, RPT_COL_START).Value = _
+        "소계: 진행 " & progCnt & "건 | 완료 " & doneCnt & "건 | 대기 " & waitCnt & "건 | 지연 " & delayCnt & "건"
+    wsRpt.Cells(curRow, RPT_COL_START).Font.Bold = True
+    wsRpt.Cells(curRow, RPT_COL_START).Font.Size = 10
+    wsRpt.Cells(curRow, RPT_COL_START).HorizontalAlignment = xlRight
+    curRow = curRow + 2
+    
+    '??????????????????????????????????????????
+    ' [2] 금일 완료 항목
+    '??????????????????????????????????????????
+    WriteSection wsRpt, curRow, "[2] 금일 완료 항목"
+    curRow = curRow + 1
+    
+    WriteHeader wsRpt, curRow, Array("No", "S/N", "제품", "공정", "설비", "완료시간", "", "")
+    curRow = curRow + 1
+    
+    Dim lastLog As Long: lastLog = GetLastRow(wsLog, PLOG_COL_SN)
+    Dim logDedup As Object: Set logDedup = CreateObject("Scripting.Dictionary")
+    Dim doneLogCnt As Long: doneLogCnt = 0
+    
+    If lastLog >= PLOG_DATA_START Then
+        For r = PLOG_DATA_START To lastLog
+            Dim logDate As Variant: logDate = wsLog.Cells(r, PLOG_COL_ACTEND).Value
+            If Not SafeIsDate(logDate) Then GoTo nxtLog2
+            If CDate(logDate) <> todayDate Then GoTo nxtLog2
+            
+            Dim logSt As String: logSt = SafeStr(wsLog.Cells(r, PLOG_COL_STATUS).Value)
+            If logSt <> ST_DONE Then GoTo nxtLog2
+            
+            Dim logSN As String: logSN = SafeStr(wsLog.Cells(r, PLOG_COL_SN).Value)
+            Dim logProc As String: logProc = SafeStr(wsLog.Cells(r, PLOG_COL_PROC).Value)
+            Dim logKey As String: logKey = logSN & "|" & logProc
+            If logDedup.Exists(logKey) Then GoTo nxtLog2
+            logDedup(logKey) = True
+            
+            doneLogCnt = doneLogCnt + 1
+            Dim logProd As String: logProd = SafeStr(wsLog.Cells(r, PLOG_COL_NAME).Value)
+            Dim logEquip As String: logEquip = SafeStr(wsLog.Cells(r, PLOG_COL_EQUIP).Value)
+            Dim logTime As String
+            If SafeIsDate(logDate) Then
+                logTime = Format(CDate(logDate), "HH:MM")
+            Else
+                logTime = "-"
+            End If
+            
+            wsRpt.Cells(curRow, RPT_COL_START).Value = doneLogCnt
+            wsRpt.Cells(curRow, RPT_COL_START + 1).Value = logSN
+            wsRpt.Cells(curRow, RPT_COL_START + 2).Value = logProd
+            wsRpt.Cells(curRow, RPT_COL_START + 3).Value = logProc
+            wsRpt.Cells(curRow, RPT_COL_START + 4).Value = logEquip
+            wsRpt.Cells(curRow, RPT_COL_START + 5).Value = logTime
+            wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(0, 140, 70)
+            StyleDataRow wsRpt, curRow
+            curRow = curRow + 1
+nxtLog2:
+        Next r
+    End If
+    
+    If doneLogCnt = 0 Then
+        wsRpt.Cells(curRow, RPT_COL_START).Value = "(금일 완료 항목 없음)"
+        wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(150, 150, 150)
+        curRow = curRow + 1
+    End If
+    curRow = curRow + 1
+    
+    '??????????????????????????????????????????
+    ' [3] 이슈 요약
+    '??????????????????????????????????????????
+    WriteSection wsRpt, curRow, "[3] 이슈 요약"
+    curRow = curRow + 1
+    
+    Dim cntFlat As Long, cntSub As Long, cntDelay As Long
+    Dim cntScrap As Long, cntMemo As Long, cntTotal As Long
+    
+    If lastProd >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastProd
+            Dim iStat As String: iStat = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            Dim iProc As String: iProc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            Dim iMemo As String: iMemo = SafeStr(wsProd.Cells(r, PROD_COL_INSP_MEMO).Value)
+            Dim iInsp As Long:   iInsp = SafeLng(wsProd.Cells(r, PROD_COL_INSP_COUNT).Value)
+            
+            If Len(SafeStr(wsProd.Cells(r, PROD_COL_SN).Value)) = 0 Then GoTo nxtIss
+            
+            If iStat = ST_SCRAP Then cntScrap = cntScrap + 1
+            If iStat = ST_DELAY Then cntDelay = cntDelay + 1
+            If iProc = NG_SUB Then cntSub = cntSub + 1
+            If iProc = PROC_FLATTENING And iInsp > 0 Then cntFlat = cntFlat + 1
+            If Len(iMemo) > 0 Then cntMemo = cntMemo + 1
+nxtIss:
+        Next r
+    End If
+    
+    Dim mLastR As Long: mLastR = GetLastRow(wsCal, CAL_MEMO_STORE_COL)
+    Dim manualCnt As Long
+    If mLastR >= CAL_MEMO_STORE_START Then
+        Dim mr As Long
+        For mr = CAL_MEMO_STORE_START To mLastR
+            If Len(SafeStr(wsCal.Cells(mr, CAL_MEMO_STORE_COL3).Value)) > 0 Then
+                manualCnt = manualCnt + 1
+            End If
+        Next mr
+    End If
+    
+    cntTotal = cntFlat + cntSub + cntDelay + cntScrap + cntMemo + manualCnt
+    
+    wsRpt.Range(wsRpt.Cells(curRow, RPT_COL_START), _
+                wsRpt.Cells(curRow, RPT_COL_END)).Merge
+    wsRpt.Cells(curRow, RPT_COL_START).Value = _
+        "총 이슈: " & cntTotal & "건   |   " & _
+        "평탄도NG: " & cntFlat & "   선가공: " & cntSub & "   지연: " & cntDelay & _
+        "   폐기: " & cntScrap & "   메모: " & (cntMemo + manualCnt)
+    wsRpt.Cells(curRow, RPT_COL_START).Font.Size = 10
+    wsRpt.Cells(curRow, RPT_COL_START).Font.Bold = True
+    
+    If cntTotal > 0 Then
+        wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(200, 50, 50)
+    Else
+        wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(0, 140, 70)
+    End If
+    curRow = curRow + 2
+    
+    '??????????????????????????????????????????
+    ' [4] 제품별 이슈 상세
+    '??????????????????????????????????????????
+    WriteSection wsRpt, curRow, "[4] 제품별 이슈 상세"
+    curRow = curRow + 1
+    
+    Dim issDict As Object: Set issDict = CreateObject("Scripting.Dictionary")
+    Dim issDedup As Object: Set issDedup = CreateObject("Scripting.Dictionary")
+    
+    If lastProd >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastProd
+            Dim dSN As String: dSN = SafeStr(wsProd.Cells(r, PROD_COL_SN).Value)
+            Dim dProd As String: dProd = SafeStr(wsProd.Cells(r, PROD_COL_PRODUCT).Value)
+            Dim dProc As String: dProc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            Dim dStat As String: dStat = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            Dim dMemo As String: dMemo = SafeStr(wsProd.Cells(r, PROD_COL_INSP_MEMO).Value)
+            Dim dInsp As Long:   dInsp = SafeLng(wsProd.Cells(r, PROD_COL_INSP_COUNT).Value)
+            
+            If Len(dSN) = 0 Or Len(dProd) = 0 Then GoTo nxtDet
+            
+            Dim hasIss As Boolean: hasIss = False
+            Dim issType As String: issType = ""
+            Dim issDesc As String: issDesc = ""
+            
+            If dStat = ST_SCRAP Then
+                hasIss = True: issType = "폐기": issDesc = "폐기 처리"
+            ElseIf dStat = ST_DELAY Then
+                hasIss = True: issType = "지연": issDesc = "공정 지연"
+            ElseIf dProc = NG_SUB Then
+                hasIss = True: issType = "선가공": issDesc = "선가공 전환"
+            ElseIf dProc = PROC_FLATTENING And dInsp > 0 Then
+                hasIss = True: issType = "평탄도NG": issDesc = "재평탄화 #" & dInsp
+            ElseIf Len(dMemo) > 0 Then
+                hasIss = True: issType = "메모": issDesc = dMemo
+            End If
+            
+            If hasIss Then
+                Dim dKey As String: dKey = dProd & "|" & dSN & "|" & issType
+                If Not issDedup.Exists(dKey) Then
+                    issDedup(dKey) = True
+                    Dim issLine As String
+                    issLine = dSN & "|" & issType & "|" & issDesc & "|" & dStat
+                    If Not issDict.Exists(dProd) Then
+                        issDict(dProd) = issLine
+                    Else
+                        issDict(dProd) = issDict(dProd) & ";" & issLine
+                    End If
+                End If
+            End If
+nxtDet:
+        Next r
+    End If
+    
+    If mLastR >= CAL_MEMO_STORE_START Then
+        For mr = CAL_MEMO_STORE_START To mLastR
+            Dim mProd As String: mProd = SafeStr(wsCal.Cells(mr, CAL_MEMO_STORE_COL).Value)
+            Dim mSN As String:   mSN = SafeStr(wsCal.Cells(mr, CAL_MEMO_STORE_COL2).Value)
+            Dim mText As String: mText = SafeStr(wsCal.Cells(mr, CAL_MEMO_STORE_COL3).Value)
+            Dim mDate As String: mDate = SafeStr(wsCal.Cells(mr, CAL_MEMO_STORE_COL4).Value)
+            
+            If Len(mProd) > 0 And Len(mText) > 0 Then
+                Dim mKey As String: mKey = mProd & "|" & mSN & "|수동"
+                If Not issDedup.Exists(mKey) Then
+                    issDedup(mKey) = True
+                    Dim mLine As String
+                    If Len(mSN) > 0 Then
+                        mLine = mSN & "|수동|" & mText & "|" & mDate
+                    Else
+                        mLine = "(전체)|수동|" & mText & "|" & mDate
+                    End If
+                    If Not issDict.Exists(mProd) Then
+                        issDict(mProd) = mLine
+                    Else
+                        issDict(mProd) = issDict(mProd) & ";" & mLine
+                    End If
+                End If
+            End If
+        Next mr
+    End If
+    
+    Dim pk As Variant
+    If issDict.count = 0 Then
+        wsRpt.Cells(curRow, RPT_COL_START).Value = "(이슈 없음)"
+        wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(150, 150, 150)
+        curRow = curRow + 1
+    Else
+        For Each pk In issDict.keys
+            wsRpt.Range(wsRpt.Cells(curRow, RPT_COL_START), _
+                        wsRpt.Cells(curRow, RPT_COL_END)).Merge
+            wsRpt.Cells(curRow, RPT_COL_START).Value = ">> " & pk
+            wsRpt.Cells(curRow, RPT_COL_START).Font.Bold = True
+            wsRpt.Cells(curRow, RPT_COL_START).Font.Size = 10
+            wsRpt.Cells(curRow, RPT_COL_START).Font.Color = RGB(0, 100, 180)
+            wsRpt.Cells(curRow, RPT_COL_START).Interior.Color = RGB(235, 245, 255)
+            curRow = curRow + 1
+            
+            Dim lines As Variant: lines = Split(issDict(pk), ";")
+            Dim li As Long
+            For li = 0 To UBound(lines)
+                Dim parts As Variant: parts = Split(lines(li), "|")
+                If UBound(parts) >= 3 Then
+                    wsRpt.Cells(curRow, RPT_COL_START + 1).Value = parts(0)
+                    wsRpt.Cells(curRow, RPT_COL_START + 2).Value = parts(1)
+                    wsRpt.Cells(curRow, RPT_COL_START + 3).Value = parts(2)
+                    wsRpt.Cells(curRow, RPT_COL_START + 5).Value = parts(3)
+                    
+                    Select Case parts(1)
+                        Case "폐기":     wsRpt.Cells(curRow, RPT_COL_START + 2).Font.Color = RGB(200, 50, 50)
+                        Case "지연":     wsRpt.Cells(curRow, RPT_COL_START + 2).Font.Color = RGB(220, 120, 0)
+                        Case "선가공":   wsRpt.Cells(curRow, RPT_COL_START + 2).Font.Color = RGB(180, 130, 0)
+                        Case "평탄도NG": wsRpt.Cells(curRow, RPT_COL_START + 2).Font.Color = RGB(200, 80, 80)
+                        Case "수동":     wsRpt.Cells(curRow, RPT_COL_START + 2).Font.Color = RGB(100, 100, 180)
+                        Case "메모":     wsRpt.Cells(curRow, RPT_COL_START + 2).Font.Color = RGB(80, 80, 80)
+                    End Select
+                    
+                    StyleDataRow wsRpt, curRow
+                    curRow = curRow + 1
+                End If
+            Next li
+        Next pk
+    End If
+    curRow = curRow + 1
+    
+    '??????????????????????????????????????????
+    ' [5] 조치 필요 항목
+    '??????????????????????????????????????????
+    WriteSection wsRpt, curRow, "[5] 조치 필요 항목"
+    curRow = curRow + 1
+    
+    Dim actFlat As Long, actSub As Long, actDly As Long
+    
+    If lastProd >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastProd
+            Dim aStat As String: aStat = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            Dim aProc As String: aProc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            Dim aInsp As Long:   aInsp = SafeLng(wsProd.Cells(r, PROD_COL_INSP_COUNT).Value)
+            
+            If Len(SafeStr(wsProd.Cells(r, PROD_COL_SN).Value)) = 0 Then GoTo nxtAct
+            If aProc = PROC_FLATTENING And aInsp >= 3 Then actFlat = actFlat + 1
+            If aProc = NG_SUB And aStat <> ST_DONE Then actSub = actSub + 1
+            If aStat = ST_DELAY Then actDly = actDly + 1
+nxtAct:
+        Next r
+    End If
+    
+    wsRpt.Cells(curRow, RPT_COL_START + 1).Value = "재평탄화 3회 이상"
+    wsRpt.Cells(curRow, RPT_COL_START + 3).Value = actFlat & "건"
+    If actFlat > 0 Then wsRpt.Cells(curRow, RPT_COL_START + 3).Font.Color = RGB(200, 50, 50)
+    StyleDataRow wsRpt, curRow
+    curRow = curRow + 1
+    
+    wsRpt.Cells(curRow, RPT_COL_START + 1).Value = "선가공 미완료"
+    wsRpt.Cells(curRow, RPT_COL_START + 3).Value = actSub & "건"
+    If actSub > 0 Then wsRpt.Cells(curRow, RPT_COL_START + 3).Font.Color = RGB(220, 120, 0)
+    StyleDataRow wsRpt, curRow
+    curRow = curRow + 1
+    
+    wsRpt.Cells(curRow, RPT_COL_START + 1).Value = "지연 항목"
+    wsRpt.Cells(curRow, RPT_COL_START + 3).Value = actDly & "건"
+    If actDly > 0 Then wsRpt.Cells(curRow, RPT_COL_START + 3).Font.Color = RGB(200, 50, 50)
+    StyleDataRow wsRpt, curRow
+    curRow = curRow + 2
+    
+    '??????????????????????????????????????????
+    ' 푸터
+    '??????????????????????????????????????????
+    DrawLine wsRpt, curRow, RGB(40, 40, 40)
+    curRow = curRow + 1
+    
+    wsRpt.Range(wsRpt.Cells(curRow, RPT_COL_START), _
+                wsRpt.Cells(curRow, RPT_COL_END)).Merge
+    With wsRpt.Cells(curRow, RPT_COL_START)
+        .Value = "ESC Manager v12.1  |  Generated: " & Format(Now, "YYYY-MM-DD HH:MM:SS")
+        .Font.Size = 8
+        .Font.Color = RGB(150, 150, 150)
+        .HorizontalAlignment = xlRight
+    End With
+    curRow = curRow + 1
+    
+    '── 인쇄 영역: C열~J열만 (사이드바 A-B 제외) ──
+    wsRpt.PageSetup.PrintArea = wsRpt.Range( _
+        wsRpt.Cells(RPT_ROW_START, RPT_COL_START), _
+        wsRpt.Cells(curRow, RPT_COL_END)).Address
+    
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    wsRpt.Activate
+    wsRpt.Cells(RPT_ROW_START, RPT_COL_START).Select
+    
+    Exit Sub
+ErrH:
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    MsgBox "GenerateDailyReport 오류: " & Err.Description, vbCritical
+End Sub
+
+'────────────────────────────────────────────
+' PDF 내보내기 (인쇄 영역만 = 사이드바/버튼 제외)
+'────────────────────────────────────────────
+Public Sub ExportReportPDF()
+    On Error GoTo ErrH
+    Dim ws As Worksheet: Set ws = ThisWorkbook.sheets(SHT_REPORT)
+    
+    '── PDF 출력 전: 버튼 숨기기 ──
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        If Left(shp.Name, 8) = "BTN_RPT_" Then
+            shp.Visible = msoFalse
+        End If
+        '사이드바 도형도 숨기기
+        If Left(shp.Name, 4) = "SDB_" Or Left(shp.Name, 8) = "SIDEBAR_" Or _
+           shp.Name = "SHP_SIDEBAR" Or Left(shp.Name, 3) = "SB_" Then
+            shp.Visible = msoFalse
+        End If
+    Next shp
+    
+    Dim fName As String
+    fName = Application.GetSaveAsFilename( _
+        InitialFileName:="ESC_DailyReport_" & Format(Date, "YYYYMMDD") & ".pdf", _
+        FileFilter:="PDF Files (*.pdf), *.pdf", _
+        title:="리포트 PDF 저장")
+    
+    If fName = "False" Or Len(fName) = 0 Then GoTo RestoreShapes
+    
+    ws.ExportAsFixedFormat _
+        Type:=xlTypePDF, _
+        fileName:=fName, _
+        Quality:=xlQualityStandard, _
+        IncludeDocProperties:=True, _
+        IgnorePrintAreas:=False, _
+        OpenAfterPublish:=True
+    
+    MsgBox "PDF 저장 완료:" & vbLf & fName, vbInformation
+
+RestoreShapes:
+    '── PDF 출력 후: 버튼/사이드바 복원 ──
+    For Each shp In ws.Shapes
+        shp.Visible = msoTrue
+    Next shp
+    Exit Sub
+    
+ErrH:
+    '오류 시에도 복원
+    For Each shp In ws.Shapes
+        shp.Visible = msoTrue
+    Next shp
+    MsgBox "PDF 저장 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────
+' 인쇄 (사이드바/버튼 숨기고 인쇄 후 복원)
+'────────────────────────────────────────────
+Public Sub PrintReport()
+    On Error GoTo ErrH
+    Dim ws As Worksheet: Set ws = ThisWorkbook.sheets(SHT_REPORT)
+    
+    If MsgBox("리포트를 인쇄하시겠습니까?", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+    
+    '── 인쇄 전: 버튼/사이드바 숨기기 ──
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        If Left(shp.Name, 8) = "BTN_RPT_" Then shp.Visible = msoFalse
+        If Left(shp.Name, 4) = "SDB_" Or Left(shp.Name, 8) = "SIDEBAR_" Or _
+           shp.Name = "SHP_SIDEBAR" Or Left(shp.Name, 3) = "SB_" Then
+            shp.Visible = msoFalse
+        End If
+    Next shp
+    
+    ws.PrintOut
+    
+    '── 인쇄 후: 복원 ──
+    For Each shp In ws.Shapes
+        shp.Visible = msoTrue
+    Next shp
+    
+    MsgBox "인쇄 완료", vbInformation
+    Exit Sub
+ErrH:
+    For Each shp In ws.Shapes
+        shp.Visible = msoTrue
+    Next shp
+    MsgBox "인쇄 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────
+' Helper: 섹션 제목
+'────────────────────────────────────────────
+Private Sub WriteSection(ws As Worksheet, ByRef curRow As Long, title As String)
+    ws.Range(ws.Cells(curRow, RPT_COL_START), _
+             ws.Cells(curRow, RPT_COL_END)).Merge
+    With ws.Cells(curRow, RPT_COL_START)
+        .Value = title
+        .Font.Size = 12
+        .Font.Bold = True
+        .Font.Color = RGB(30, 30, 30)
+    End With
+    With ws.Range(ws.Cells(curRow, RPT_COL_START), _
+                  ws.Cells(curRow, RPT_COL_END)).Borders(xlEdgeBottom)
+        .lineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = RGB(0, 100, 180)
+    End With
+End Sub
+
+'────────────────────────────────────────────
+' Helper: 테이블 헤더
+'────────────────────────────────────────────
+Private Sub WriteHeader(ws As Worksheet, ByRef curRow As Long, headers As Variant)
+    Dim c As Long
+    For c = 0 To UBound(headers)
+        With ws.Cells(curRow, RPT_COL_START + c)
+            .Value = headers(c)
+            .Font.Bold = True
+            .Font.Size = 9
+            .Font.Color = RGB(255, 255, 255)
+            .Interior.Color = RGB(50, 60, 80)
+            .HorizontalAlignment = xlCenter
+        End With
+    Next c
+    With ws.Range(ws.Cells(curRow, RPT_COL_START), _
+                  ws.Cells(curRow, RPT_COL_END)).Borders(xlEdgeBottom)
+        .lineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = RGB(100, 100, 100)
+    End With
+End Sub
+
+'────────────────────────────────────────────
+' Helper: 데이터 행 스타일
+'────────────────────────────────────────────
+Private Sub StyleDataRow(ws As Worksheet, curRow As Long)
+    Dim c As Long
+    For c = RPT_COL_START To RPT_COL_END
+        With ws.Cells(curRow, c)
+            .Font.Name = RPT_FONT
+            .Font.Size = 9
+            If .Font.Color = RGB(0, 0, 0) Then .Font.Color = RGB(40, 40, 40)
+        End With
+        With ws.Cells(curRow, c).Borders(xlEdgeBottom)
+            .lineStyle = xlContinuous
+            .Weight = xlHairline
+            .Color = RGB(200, 200, 200)
+        End With
+    Next c
+End Sub
+
+'────────────────────────────────────────────
+' Helper: 상태 색상
+'────────────────────────────────────────────
+Private Sub ColorStatus(ws As Worksheet, curRow As Long, col As Long, st As String)
+    With ws.Cells(curRow, col)
+        .Font.Bold = True
+        Select Case st
+            Case ST_PROG:  .Font.Color = RGB(0, 120, 200)
+            Case ST_DONE:  .Font.Color = RGB(0, 160, 80)
+            Case ST_WAIT:  .Font.Color = RGB(150, 150, 150)
+            Case ST_DELAY: .Font.Color = RGB(220, 80, 0)
+            Case ST_SCRAP: .Font.Color = RGB(200, 50, 50)
+            Case Else:     .Font.Color = RGB(80, 80, 80)
+        End Select
+    End With
+End Sub
+
+'────────────────────────────────────────────
+' Helper: 구분선
+'────────────────────────────────────────────
+Private Sub DrawLine(ws As Worksheet, ByRef curRow As Long, clr As Long)
+    With ws.Range(ws.Cells(curRow, RPT_COL_START), _
+                  ws.Cells(curRow, RPT_COL_END)).Borders(xlEdgeBottom)
+        .lineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = clr
+    End With
+End Sub
+
+'────────────────────────────────────────────
+' Helper: 한글 요일
+'────────────────────────────────────────────
+Private Function GetDowKor(d As Date) As String
+    Select Case Weekday(d, vbSunday)
+        Case 1: GetDowKor = "일"
+        Case 2: GetDowKor = "월"
+        Case 3: GetDowKor = "화"
+        Case 4: GetDowKor = "수"
+        Case 5: GetDowKor = "목"
+        Case 6: GetDowKor = "금"
+        Case 7: GetDowKor = "토"
+    End Select
+End Function
+
+

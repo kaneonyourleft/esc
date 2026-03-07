@@ -1,0 +1,272 @@
+﻿VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmProductReg 
+   Caption         =   "제품 등록"
+   ClientHeight    =   7032
+   ClientLeft      =   108
+   ClientTop       =   456
+   ClientWidth     =   6180
+   OleObjectBlob   =   "frmProductReg.frx":0000
+   StartUpPosition =   1  '소유자 가운데
+End
+Attribute VB_Name = "frmProductReg"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+
+' ============================================================
+'  frmProductReg ? 제품 마스터 등록 UserForm (동적 생성)
+'  ESC Production Management System v12.0
+' ============================================================
+
+Private WithEvents btnRegister As MSForms.CommandButton
+Attribute btnRegister.VB_VarHelpID = -1
+Private WithEvents btnCancel   As MSForms.CommandButton
+Attribute btnCancel.VB_VarHelpID = -1
+
+Private cboType    As MSForms.ComboBox
+Private txtName    As MSForms.TextBox
+Private txtDrawing As MSForms.TextBox
+Private txtShrink  As MSForms.TextBox
+Private txtStack   As MSForms.TextBox
+Private cboDC      As MSForms.ComboBox
+Private cboHeat    As MSForms.ComboBox
+
+' ============================================================
+'  UserForm_Initialize
+' ============================================================
+
+Private Sub UserForm_Initialize()
+    Dim lbl        As MSForms.Label
+    Dim topPos     As Single
+    Dim labelWidth As Single
+    Dim inputWidth As Single
+    Dim leftLabel  As Single
+    Dim leftInput  As Single
+    Dim rowHeight  As Single
+    Dim rowGap     As Single
+
+    Me.Caption = "제품 등록"
+    Me.Width = 360
+    Me.Height = 400
+    Me.BackColor = CLR_BG_DARK
+
+    labelWidth = 80
+    inputWidth = 180
+    leftLabel = 16
+    leftInput = 104
+    rowHeight = 22
+    rowGap = 32
+    topPos = 16
+
+    ' ── 타이틀 ──────────────────────────────────
+    Set lbl = Me.Controls.Add("Forms.Label.1", "lblTitle")
+    With lbl
+        .Caption = "ESC 제품 마스터 등록"
+        .Left = leftLabel
+        .Top = topPos
+        .Width = 280
+        .Height = 20
+        .Font.Size = 12
+        .Font.Bold = True
+        .ForeColor = CLR_CYAN
+        .BackStyle = fmBackStyleTransparent
+    End With
+    topPos = topPos + 36
+
+    ' ── 구분 (필수) ─────────────────────────────
+    Set lbl = CreateLabel(Me, "lblType", "구분 *", leftLabel, topPos, labelWidth)
+    Set cboType = Me.Controls.Add("Forms.ComboBox.1", "cboType")
+    FormatCombo cboType, leftInput, topPos, inputWidth, rowHeight
+    cboType.AddItem "BL"
+    cboType.AddItem "WN"
+    cboType.AddItem "HP"
+    topPos = topPos + rowGap
+
+    ' ── 제품명 (필수) ────────────────────────────
+    Set lbl = CreateLabel(Me, "lblName", "제품명 *", leftLabel, topPos, labelWidth)
+    Set txtName = Me.Controls.Add("Forms.TextBox.1", "txtName")
+    FormatTextBox txtName, leftInput, topPos, inputWidth, rowHeight
+    topPos = topPos + rowGap
+
+    ' ── 도면번호 ─────────────────────────────────
+    Set lbl = CreateLabel(Me, "lblDrawing", "도면번호", leftLabel, topPos, labelWidth)
+    Set txtDrawing = Me.Controls.Add("Forms.TextBox.1", "txtDrawing")
+    FormatTextBox txtDrawing, leftInput, topPos, inputWidth, rowHeight
+    topPos = topPos + rowGap
+
+    ' ── 수축률 ───────────────────────────────────
+    Set lbl = CreateLabel(Me, "lblShrink", "수축률", leftLabel, topPos, labelWidth)
+    Set txtShrink = Me.Controls.Add("Forms.TextBox.1", "txtShrink")
+    FormatTextBox txtShrink, leftInput, topPos, inputWidth, rowHeight
+    topPos = topPos + rowGap
+
+    ' ── 적층수량 (필수) ──────────────────────────
+    Set lbl = CreateLabel(Me, "lblStack", "적층수량 *", leftLabel, topPos, labelWidth)
+    Set txtStack = Me.Controls.Add("Forms.TextBox.1", "txtStack")
+    FormatTextBox txtStack, leftInput, topPos, inputWidth, rowHeight
+    topPos = topPos + rowGap
+
+    ' ── DC접합 ───────────────────────────────────
+    Set lbl = CreateLabel(Me, "lblDC", "DC접합", leftLabel, topPos, labelWidth)
+    Set cboDC = Me.Controls.Add("Forms.ComboBox.1", "cboDC")
+    FormatCombo cboDC, leftInput, topPos, inputWidth, rowHeight
+    cboDC.AddItem "Brazing"
+    cboDC.AddItem "Spring"
+    cboDC.AddItem "Soldering"
+    topPos = topPos + rowGap
+
+    ' ── 열처리 (필수) ────────────────────────────
+    Set lbl = CreateLabel(Me, "lblHeat", "열처리 *", leftLabel, topPos, labelWidth)
+    Set cboHeat = Me.Controls.Add("Forms.ComboBox.1", "cboHeat")
+    FormatCombo cboHeat, leftInput, topPos, inputWidth, rowHeight
+    cboHeat.AddItem "Y"
+    cboHeat.AddItem "N"
+    topPos = topPos + rowGap + 8
+
+    ' ── 등록 버튼 ────────────────────────────────
+    Set btnRegister = Me.Controls.Add("Forms.CommandButton.1", "btnRegister")
+    With btnRegister
+        .Caption = "등록"
+        .Left = leftInput
+        .Top = topPos
+        .Width = 80
+        .Height = 28
+        .BackColor = CLR_CYAN
+        .ForeColor = CLR_BG_DARK
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+
+    ' ── 취소 버튼 ────────────────────────────────
+    Set btnCancel = Me.Controls.Add("Forms.CommandButton.1", "btnCancel")
+    With btnCancel
+        .Caption = "취소"
+        .Left = leftInput + 90
+        .Top = topPos
+        .Width = 80
+        .Height = 28
+        .BackColor = CLR_BG_LIGHT
+        .ForeColor = CLR_TEXT_LIGHT
+        .Font.Size = 10
+    End With
+End Sub
+
+' ============================================================
+'  버튼 이벤트
+' ============================================================
+
+Private Sub btnRegister_Click()
+    Dim prodType  As String
+    Dim prodName  As String
+    Dim drawing   As String
+    Dim shrink    As String
+    Dim stackQty  As Long
+    Dim dcJoint   As String
+    Dim heatTreat As String
+
+    ' ── 필수값 검증 ──────────────────────────────
+
+    prodType = SafeStr(cboType.Value)
+    If Trim(prodType) = "" Then
+        MsgBox "구분(BL/WN/HP)을 선택해주세요.", vbExclamation
+        cboType.SetFocus
+        Exit Sub
+    End If
+
+    prodName = SafeStr(txtName.Value)
+    If Trim(prodName) = "" Then
+        MsgBox "제품명을 입력해주세요.", vbExclamation
+        txtName.SetFocus
+        Exit Sub
+    End If
+
+    ' 적층수량 필수 검증 (E항 반영)
+    If Trim(SafeStr(txtStack.Value)) = "" Or Not IsNumeric(txtStack.Value) Then
+        MsgBox "적층수량을 숫자로 입력하세요.", vbExclamation
+        txtStack.SetFocus
+        Exit Sub
+    End If
+    stackQty = CLng(txtStack.Value)
+    If stackQty < 1 Then
+        MsgBox "적층수량은 1 이상이어야 합니다.", vbExclamation
+        txtStack.SetFocus
+        Exit Sub
+    End If
+
+    heatTreat = SafeStr(cboHeat.Value)
+    If Trim(heatTreat) = "" Then
+        MsgBox "열처리(Y/N)를 선택해주세요.", vbExclamation
+        cboHeat.SetFocus
+        Exit Sub
+    End If
+
+    drawing = SafeStr(txtDrawing.Value)
+    shrink = SafeStr(txtShrink.Value)
+    dcJoint = SafeStr(cboDC.Value)
+
+    RegisterProduct prodType, prodName, drawing, shrink, stackQty, dcJoint, heatTreat
+
+    Unload Me
+End Sub
+
+Private Sub btnCancel_Click()
+    Unload Me
+End Sub
+
+' ============================================================
+'  공통 헬퍼
+' ============================================================
+
+Private Function CreateLabel(frm As Object, ctrlName As String, _
+                              captionText As String, l As Single, _
+                              t As Single, w As Single) As MSForms.Label
+    Dim lbl As MSForms.Label
+    Set lbl = frm.Controls.Add("Forms.Label.1", ctrlName)
+    With lbl
+        .Caption = captionText
+        .Left = l
+        .Top = t + 3
+        .Width = w
+        .Height = 18
+        .Font.Size = 9
+        .ForeColor = CLR_TEXT_LIGHT
+        .BackStyle = fmBackStyleTransparent
+    End With
+    Set CreateLabel = lbl
+End Function
+
+Private Sub FormatTextBox(txt As MSForms.TextBox, l As Single, _
+                           t As Single, w As Single, h As Single)
+    With txt
+        .Left = l
+        .Top = t
+        .Width = w
+        .Height = h
+        .BackColor = CLR_BG_MID
+        .ForeColor = CLR_TEXT_WHITE
+        .BorderStyle = fmBorderStyleSingle
+        .borderColor = CLR_BG_LIGHT
+        .Font.Size = 9
+        .Font.Name = "맑은 고딕"
+    End With
+End Sub
+
+Private Sub FormatCombo(cbo As MSForms.ComboBox, l As Single, _
+                         t As Single, w As Single, h As Single)
+    With cbo
+        .Left = l
+        .Top = t
+        .Width = w
+        .Height = h
+        .BackColor = CLR_BG_MID
+        .ForeColor = CLR_TEXT_WHITE
+        .borderColor = CLR_BG_LIGHT
+        .Font.Size = 9
+        .Font.Name = "맑은 고딕"
+        .Style = fmStyleDropDownList
+    End With
+End Sub
+
+
