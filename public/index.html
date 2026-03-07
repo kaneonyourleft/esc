@@ -145,10 +145,10 @@
           <div class="ws-toolbar" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
             <!-- 1행: 뷰 + 필터 + 펼치기 -->
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <select class="form-input form-select" id="wsViewSelect" onchange="setWsView(this.value)" style="width:90px;padding:5px 8px;font-size:12px;font-weight:600;background:var(--primary);color:#fff;border-color:var(--primary);border-radius:var(--r8)">
-                <option value="product" style="background:#fff;color:#333">제품별</option>
-                <option value="batch" style="background:#fff;color:#333">배치별</option>
-                <option value="process" style="background:#fff;color:#333">공정별</option>
+              <select class="form-input form-select" id="wsViewSelect" onchange="setWsView(this.value)" style="width:90px;padding:5px 8px;font-size:12px;font-weight:600;border-radius:var(--r8)">
+                <option value="product">제품별</option>
+                <option value="batch">배치별</option>
+                <option value="process">공정별</option>
               </select>
               <div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>
               <select class="form-input form-select" id="wsFilterStatus" onchange="renderWorkspace()" style="width:76px;padding:5px 8px;font-size:12px">
