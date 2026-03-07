@@ -117,12 +117,12 @@ const PROC_COLORS = {
 };
 
 const EQ_MAP = {
-  '탈지': ['탈지 1호기', '탈지 2호기', '탈지 3호기'],
-    '소성': ['소성 1호기','소성 4호기','소성 5호기','소성 6호기','소성 7호기','소성 8호기','소성 9호기','소성 10호기','소성 11호기','소성 12호기','소성 13호기','소성 14호기','소성 15호기','소성 16호기','소성 17호기','소성 18호기'],
-  '환원소성': ['환원 5호기', '환원 6호기', '환원 7호기', '환원 8호기', '환원 9호기', '환원 10호기', '환원 11호기', '환원 12호기', '환원 13호기', '환원 14호기', '환원 15호기', '환원 16호기', '환원 17호기', '환원 18호기'],
-  '평탄화': ['평탄화 A', '평탄화 B', '평탄화 C'],
-  '도금': ['도금 1라인', '도금 2라인', '도금 3라인'],
-  '열처리': ['열처리 A', '열처리 B']
+  '탈지': ['1호기', '2호기', '3호기'],
+  '소성': ['1호기', '4호기', '5호기', '10호기', '11호기', '12호기', '13호기', '14호기', '15호기', '16호기', '17호기', '18호기'],
+  '환원소성': ['2호기'],
+  '평탄화': ['3호기', '6호기', '7호기', '8호기', '9호기'],
+  '도금': ['외주'],
+  '열처리': ['GB']
 };
 
 const DEFAULT_WIDGETS = [
@@ -233,14 +233,12 @@ function diffBD(start, end) {
   }
 
   // VBA 기준 소성기 필터: BL→1·4호기, WN→5~18호기
+  // VBA GetEquipListForProc 기준
   function getAvailableFurnaces(category) {
     const all = EQ_MAP["소성"] || [];
-    if (category === "BL") return all.filter(e => /1호기|4호기/.test(e));
-    if (category === "WN") return all.filter(e => {
-      const num = parseInt(e.match(/(\d+)호기/)?.[1] || "0");
-      return num >= 5 && num <= 18;
-    });
-    return all;
+    if (category === "BL") return all.filter(e => e === "1호기" || e === "4호기");
+    // WN: 5,10~18호기
+    return all.filter(e => e !== "1호기" && e !== "4호기");
   }
 
 function extractCategory(sn) {
@@ -269,13 +267,24 @@ function getRoute(sn, item) {
   return buildRoute(cat, heat);
 }
 
+  // VBA GetEquipListForProc 완전 반영
   function getEquipList(proc, category) {
-    const all = EQ_MAP[proc] || [];
-    // 소성 공정이면 BL/WN별 필터
-    if (proc === "소성" && category) {
-      return getAvailableFurnaces(category);
+    const cat = (category || "").toUpperCase();
+    switch (proc) {
+      case "탈지": return ["1호기", "2호기", "3호기"];
+      case "소성":
+        if (cat === "BL") return ["1호기", "4호기"];
+        return ["5호기", "10호기", "11호기", "12호기", "13호기", "14호기", "15호기", "16호기", "17호기", "18호기"];
+      case "환원소성":
+        if (cat === "BL") return ["2호기"];
+        return [];
+      case "평탄화":
+        if (cat === "BL") return ["3호기"];
+        return ["6호기", "7호기", "8호기", "9호기"];
+      case "도금": return ["외주"];
+      case "열처리": return ["GB"];
+      default: return EQ_MAP[proc] || [];
     }
-    return all;
   }
 
 function calcProgress(item, sn) {
@@ -3033,3 +3042,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (procSel) procSel.addEventListener('change', window.onBatchProcChange);
 });
 
+
+// ── 워크스페이스 검색 실시간 바인딩 ──
+(function() {
+  let _wsSearchTimer = null;
+  document.addEventListener('input', function(e) {
+    if (e.target && e.target.id === 'wsSearch') {
+      clearTimeout(_wsSearchTimer);
+      _wsSearchTimer = setTimeout(() => renderWorkspace(), 150);
+    }
+  });
+})();
