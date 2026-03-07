@@ -155,9 +155,9 @@ Public Function GetProcDays(procName As String, prodType As String, _
         Case PROC_FLATTENING
             GetProcDays = 3
         Case PROC_PLATING
-            Select Case Trim(dcJoint)
-                Case "Brazing":              GetProcDays = 0
-                Case "Spring", "Soldering":  GetProcDays = 1
+            Select Case UCase(Trim(dcJoint))
+                Case "BRAZING":              GetProcDays = 0
+                Case "SPRING", "SOLDERING":  GetProcDays = 1
                 Case Else:                   GetProcDays = 1
             End Select
         Case PROC_HEATTREAT
