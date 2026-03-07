@@ -1,4 +1,4 @@
-/* ===================================================
+﻿/* ===================================================
    ESC Manager v10.0 - main.css
    =================================================== */
 
@@ -654,8 +654,11 @@ tr:hover td { background: var(--glass); }
 
 /* === 간트차트 === */
 #ganttTab {
-  display: flex; flex-direction: column;
-  height: 100%; overflow: hidden; min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--tb) - 40px);
+  max-height: calc(100vh - var(--tb) - 40px);
+  overflow: hidden;
 }
 .gantt-controls {
   display: flex; align-items: center; gap: 6px;
@@ -668,8 +671,9 @@ tr:hover td { background: var(--glass); }
   border: 1px solid var(--border);
   border-radius: var(--r8);
   overflow: hidden;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
+  max-height: 100%;
 }
 .gantt-corner {
   grid-column: 1; grid-row: 1;
@@ -708,6 +712,7 @@ tr:hover td { background: var(--glass); }
   border-right: 1px solid var(--border);
   background: var(--bg2);
   z-index: 15;
+  min-height: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -730,6 +735,7 @@ tr:hover td { background: var(--glass); }
 .gantt-body-wrap {
   grid-column: 2; grid-row: 2;
   overflow: auto;
+  min-height: 0;
 }
 .gantt-body { position: relative; min-height: 100%; }
 .gantt-bar {
@@ -1018,10 +1024,23 @@ canvas { display: block; }
   .kpi-lbl { font-size: 10px !important; }
 
   #ganttTab {
-    height: calc(100vh - var(--tb) - var(--bb) - 20px) !important;
-    overflow: hidden !important; min-height: 0 !important;
-  }
-  .gantt-grid { grid-template-columns: 120px 1fr !important; min-height: 0 !important; }
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--tb) - 40px);
+  max-height: calc(100vh - var(--tb) - 40px);
+  overflow: hidden;
+}
+  .gantt-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: 40px 1fr;
+  border: 1px solid var(--border);
+  border-radius: var(--r8);
+  overflow: hidden;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
+}
   .gantt-sb-group, .gantt-sb-item { font-size: 11px !important; height: 32px !important; }
   .gantt-controls .tab-btn { padding: 5px 10px; font-size: 12px; }
   .gantt-controls { gap: 4px !important; }
@@ -1093,7 +1112,17 @@ canvas { display: block; }
 @media (max-width: 480px) {
   .grid4 { grid-template-columns: 1fr 1fr !important; }
   .kpi-val { font-size: 18px !important; }
-  .gantt-grid { grid-template-columns: 100px 1fr !important; }
+  .gantt-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: 40px 1fr;
+  border: 1px solid var(--border);
+  border-radius: var(--r8);
+  overflow: hidden;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
+}
   .pipeline-grid { gap: 1px !important; }
   .pipeline-item { min-width: 56px !important; padding: 6px 3px !important; }
   .qr-print-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1116,3 +1145,7 @@ canvas { display: block; }
   .qr-print-item { border: 1px solid #ccc !important; background: #fff !important; padding: 4px !important; break-inside: avoid; }
   .qr-print-item span { color: #000 !important; font-size: 8px !important; }
 }
+
+
+
+

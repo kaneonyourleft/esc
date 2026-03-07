@@ -585,7 +585,8 @@ window.switchTab = function(tab) {
     if (el) el.style.display = 'none';
   });
   const target = document.getElementById(TAB_MAP[tab]);
-  if (target) target.style.display = (tab === 'workspace') ? 'flex' : 'block';
+  if (target) target.style.display = (tab === 'workspace' || tab === 'gantt') ? 'flex' : 'block';
+  document.getElementById('content').style.overflow = (tab === 'gantt') ? 'hidden' : '';
   document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   document.querySelectorAll('.bb-item').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   document.getElementById('tbTitle').textContent = TAB_TITLES[tab] || tab;
@@ -1649,11 +1650,10 @@ function renderGantt() {
   rows.forEach(row => {
     if (row.type === 'group') {
       const collapsed = ganttGroupState[row.key];
-      sidebarHtml += `<div class="gantt-sb-group" onclick="window.ganttToggleGroup('${esc(row.key)}')" style="cursor:pointer;padding:6px 8px;font-weight:600;font-size:12px;background:var(--bg3);display:flex;align-items:center;gap:4px;height:28px;box-sizing:border-box">
-        <span style="font-size:10px;transform:rotate(${collapsed ? '0' : '90'}deg);transition:transform 0.2s">▶</span>${esc(row.label)} <span style="color:var(--t2);font-weight:400">(${row.count})</span>
+      sidebarHtml += `<div class="gantt-sb-group" onclick="window.ganttToggleGroup('${esc(row.key)}')" style="cursor:pointer;padding:6px 8px;font-weight:600;font-size:12px;background:var(--bg3);display:flex;align-items:center;gap:4px;height:36px;box-sizing:border-box"><span style="font-size:10px;transform:rotate(${collapsed ? '0' : '90'}deg);transition:transform 0.2s">▶</span>${esc(row.label)} <span style="color:var(--t2);font-weight:400">(${row.count})</span>
       </div>`;
     } else {
-      sidebarHtml += `<div class="gantt-sb-item" onclick="openSidePanel('${esc(row.sn)}')" style="cursor:pointer;padding:4px 8px;font-size:11px;height:28px;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-bottom:1px solid var(--border)">${esc(row.sn)}</div>`;
+      sidebarHtml += `<div class="gantt-sb-item" onclick="openSidePanel('${esc(row.sn)}')" style="cursor:pointer;padding:4px 8px;font-size:11px;height:36px;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-bottom:1px solid var(--border)">${esc(row.sn)}</div>`;
     }
   });
   sidebar.innerHTML = sidebarHtml;
@@ -1677,8 +1677,8 @@ function renderGantt() {
 
   rows.forEach(row => {
     if (row.type === 'group') {
-      bodyHtml += `<div style="position:absolute;left:0;top:${rowY}px;width:100%;height:28px;background:var(--bg3)"></div>`;
-      rowY += 28;
+      bodyHtml += `<div style="position:absolute;left:0;top:${rowY}px;width:100%;height:36px;background:var(--bg3)"></div>`;
+      rowY += 36;
     } else {
       const d = row.d;
       const route = getRoute(row.sn, d);
@@ -1706,7 +1706,7 @@ function renderGantt() {
         const status = p.status || '대기';
         const opacity = status === '완료' ? 0.6 : 1;
 
-        bodyHtml += `<div class="gantt-bar" style="position:absolute;left:${left}px;top:${rowY + 4}px;width:${width}px;height:20px;background:${color};border-radius:4px;opacity:${opacity};cursor:pointer;display:flex;align-items:center;padding:0 4px;overflow:hidden;z-index:2" title="${esc(row.sn)} / ${esc(proc)} / ${esc(status)} / ${start}~${end}" onclick="openSidePanel('${esc(row.sn)}')">
+        bodyHtml += `<div class="gantt-bar" style="position:absolute;left:${left}px;top:${rowY + 9}px;width:${width}px;height:20px;background:${color};border-radius:4px;opacity:${opacity};cursor:pointer;display:flex;align-items:center;padding:0 4px;overflow:hidden;z-index:2" title="${esc(row.sn)} / ${esc(proc)} / ${esc(status)} / ${start}~${end}" onclick="openSidePanel('${esc(row.sn)}')">
           <span style="font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(proc)}${p.equip ? ' · ' + esc(p.equip) : ''}</span>
         </div>`;
         hasBar = true;
@@ -1720,14 +1720,14 @@ function renderGantt() {
         const endOff = Math.round((new Date(end + 'T00:00:00') - rangeStart) / 86400000);
         const left = startOff * ganttDayWidth;
         const width = Math.max((endOff - startOff + 1) * ganttDayWidth, ganttDayWidth);
-        bodyHtml += `<div class="gantt-bar" style="position:absolute;left:${left}px;top:${rowY + 4}px;width:${width}px;height:20px;background:#6366f1;border-radius:4px;opacity:0.4;cursor:pointer;display:flex;align-items:center;padding:0 4px;overflow:hidden;z-index:2;border:1px dashed rgba(255,255,255,0.3)" title="${esc(row.sn)} (폴백: ${fallbackStart}~${end})" onclick="openSidePanel('${esc(row.sn)}')">
+        bodyHtml += `<div class="gantt-bar" style="position:absolute;left:${left}px;top:${rowY + 9}px;width:${width}px;height:20px;background:#6366f1;border-radius:4px;opacity:0.4;cursor:pointer;display:flex;align-items:center;padding:0 4px;overflow:hidden;z-index:2;border:1px dashed rgba(255,255,255,0.3)" title="${esc(row.sn)} (폴백: ${fallbackStart}~${end})" onclick="openSidePanel('${esc(row.sn)}')">
           <span style="font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(row.sn)}</span>
         </div>`;
         barCount++;
       }
 
-      bodyHtml += `<div style="position:absolute;left:0;top:${rowY + 28}px;width:100%;height:1px;background:var(--border);opacity:0.3"></div>`;
-      rowY += 28;
+      bodyHtml += `<div style="position:absolute;left:0;top:${rowY + 36}px;width:100%;height:1px;background:var(--border);opacity:0.3"></div>`;
+      rowY += 36;
     }
   });
 
@@ -3073,4 +3073,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
+
+
 
