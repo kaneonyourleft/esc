@@ -1132,6 +1132,33 @@ canvas { display: block; }
   .cal-controls .tab-btn { padding: 4px 8px !important; font-size: 11px !important; }
   .cal-summary { font-size: 10px !important; flex-wrap: wrap; gap: 4px !important; }
   .cal-legend { font-size: 9px !important; flex-wrap: wrap; }
+  /* 날짜 필터 모바일 수정 */
+  .ws-toolbar input[type="date"] {
+    min-width: 110px !important;
+    max-width: 130px !important;
+  }
+
+  /* 워크스페이스 테이블 가로 스크롤 */
+  #wsTable { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  #wsTable table { min-width: 600px; }
+  .ws-row td { white-space: nowrap; }
+
+  /* 캘린더 가로 스크롤 방지 - 7열 균등 */
+  .cal-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    table-layout: fixed !important;
+  }
+  .cal-grid > div {
+    overflow: hidden !important;
+    word-break: break-all !important;
+    min-width: 0 !important;
+  }
+  #calendarTab { overflow: hidden !important; }
+  .cal-month-grid { overflow: hidden !important; width: 100% !important; }
+
 
   /* 간트 사이드바 축소 */
   .gantt-grid { grid-template-columns: 120px 1fr !important; }
@@ -1177,6 +1204,7 @@ canvas { display: block; }
   .qr-print-item { border: 1px solid #ccc !important; background: #fff !important; padding: 4px !important; break-inside: avoid; }
   .qr-print-item span { color: #000 !important; font-size: 8px !important; }
 }
+
 
 
 
