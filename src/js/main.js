@@ -828,7 +828,7 @@ function updateFilterOptions() {
   fillSel("wsFilterProc", procSet);
 }
 
-function renderWorkspace() {
+window.renderWorkspace = function renderWorkspace() {
   const table = document.getElementById('wsTable');
   if (!table) return;
   updateFilterOptions();
@@ -870,6 +870,8 @@ function renderWorkspace() {
         if (fD(p.actualStart)) allDates.push(fD(p.actualStart));
         if (fD(p.actualEnd)) allDates.push(fD(p.actualEnd));
       });
+
+
       if (!allDates.includes(fDate)) return false;
     }
     if (search) {
