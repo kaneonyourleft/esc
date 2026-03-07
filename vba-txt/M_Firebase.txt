@@ -401,7 +401,7 @@ End Sub
 ' ────────────────────────────────────────────
 Public Sub PullFromFirebase()
     On Error GoTo ErrH
-    Dim plogLR3 As Long, delR As Long, delProc As String, procJson As String
+    Dim plogLR3 As Long, delR As Long, delProc As String, procNames As String, reIdx As Long, plogLastR As Long
     Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
     Dim wsPlog As Worksheet: Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
 
@@ -531,6 +531,7 @@ Public Sub PullFromFirebase()
             Dim scanPos As Long: scanPos = procFieldsPos + 10
             Dim procEndPos As Long: procEndPos = FindDocEnd(dJson, procStart)
             
+            procNames = ""
             Do While scanPos < procEndPos
                 ' 다음 키(공정명) 찾기: "공정명":{"mapValue"...
                 Dim keyStart As Long: keyStart = InStr(scanPos, dJson, """")
@@ -587,20 +588,18 @@ Public Sub PullFromFirebase()
                 wsPlog.Cells(plogRow, PLOG_COL_REMARK).Value = ExtractField(pnJson, "remark")
                 wsPlog.Cells(plogRow, PLOG_COL_LOGTIME).Value = Now()
                 updPlog = updPlog + 1
+                procNames = procNames & "|" & pn & "|"
                 
                 scanPos = pnEnd + 1
 NextDynProc:
             Loop
 
             ' ── Firebase에 없는 공정 행 삭제 ──
-            ' processes 섹션만 추출하여 검사
-            procJson = ""
-            If procStart > 0 Then procJson = Mid(dJson, procStart, procEndPos - procStart)
             plogLR3 = GetLastRow(wsPlog, PLOG_COL_LOGID)
             For delR = plogLR3 To PLOG_DATA_START Step -1
                 If SafeStr(wsPlog.Cells(delR, PLOG_COL_SN).Value) = sn Then
                     delProc = SafeStr(wsPlog.Cells(delR, PLOG_COL_PROC).Value)
-                    If Len(procJson) > 0 And InStr(procJson, Chr(34) & delProc & Chr(34)) = 0 Then
+                    If InStr(procNames, "|" & delProc & "|") = 0 Then
                         wsPlog.Rows(delR).Delete
                     End If
                 End If
@@ -619,6 +618,12 @@ NextPullDoc:
 CleanUp:
     Application.StatusBar = False
     Application.ScreenUpdating = True
+
+    ' ── LogID 재정렬 ──
+    plogLastR = GetLastRow(wsPlog, PLOG_COL_LOGID)
+    For reIdx = PLOG_DATA_START To plogLastR
+        wsPlog.Cells(reIdx, PLOG_COL_LOGID).Value = reIdx - PLOG_DATA_START + 1
+    Next reIdx
 
     Dim msg As String
     msg = Chr(9989) & " Firebase → 엑셀 동기화 완료!" & vbCrLf & vbCrLf & _
