@@ -92,7 +92,7 @@ let calViewMode = 'month';
 let ganttViewMode = 'product';
 let ganttDayWidth = 30;
 let ganttGroupState = {};
-let wsViewMode = 'product';
+let wsViewMode = localStorage.getItem('wsViewMode') || 'product';
 let wsFilter = '전체';
 let wsGroupState = {};
 let wsSelection = new Set();
@@ -784,11 +784,11 @@ window.setWsView = function(mode, btn) {
   renderWorkspace();
 };
 
-window.toggleFilter = function(f) {
-  wsFilter = f;
-  document.querySelectorAll('.filter-chips .chip').forEach(el => el.classList.toggle('active', el.dataset.f === f));
-  renderWorkspace();
-};
+window.toggleFilter = function(f) { renderWorkspace(); };
+
+
+
+
 
 window.toggleAllGroups = function() {
   wsAllExpanded = !wsAllExpanded;
@@ -807,15 +807,69 @@ function renderWorkspace() {
   const table = document.getElementById('wsTable');
   if (!table) return;
 
+  // 드롭다운 옵션 자동 채우기
+  const prodSet = new Set(), batchSet = new Set(), equipSet = new Set(), procSet = new Set();
+  Object.entries(DATA).forEach(([sn, d]) => {
+    if (d.productName) prodSet.add(d.productName);
+    const b = d.batch || d.batchId || "";
+    if (b) batchSet.add(b);
+    getRoute(sn, d).forEach(proc => { procSet.add(proc); const eq = getProc(d, proc).equip; if (eq) equipSet.add(eq); });
+  });
+  const fillSel = (id, items) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    const sorted = [...items].sort();
+    const existing = [...sel.options].slice(1).map(o => o.value);
+    if (JSON.stringify(sorted) === JSON.stringify(existing)) return;
+    const label = sel.options[0] ? sel.options[0].text : "";
+    sel.innerHTML = "<option value=\"\">" + label + "</option>" + sorted.map(v => "<option value=\"" + esc(v) + "\">" + esc(v) + "</option>").join("");
+    sel.value = prev;
+  };
+  fillSel("wsFilterProduct", prodSet);
+  fillSel("wsFilterBatch", batchSet);
+  fillSel("wsFilterEquip", equipSet);
+  fillSel("wsFilterProc", procSet);
+
   const search = (document.getElementById('wsSearch')?.value || '').toLowerCase();
+  const fStatus = document.getElementById("wsFilterStatus")?.value || "";
+  const fProduct = document.getElementById("wsFilterProduct")?.value || "";
+  const fBatch = document.getElementById("wsFilterBatch")?.value || "";
+  const fEquip = document.getElementById("wsFilterEquip")?.value || "";
+  const fProc = document.getElementById("wsFilterProc")?.value || "";
+  const fDate = document.getElementById("wsFilterDate")?.value || "";
   const filtered = Object.entries(DATA).filter(([sn, d]) => {
-    if (wsFilter !== '전체') {
-      const s = d.status || '대기';
-      if (wsFilter === '지연' && s !== '지연') return false;
-      if (wsFilter !== '지연' && s !== wsFilter) return false;
+    const s = d.status || "대기";
+    if (fStatus && s !== fStatus) return false;
+    if (fProduct && (d.productName || "") !== fProduct) return false;
+    const snBatch = d.batch || d.batchId || "";
+    if (fBatch && snBatch !== fBatch) return false;
+    if (fEquip) {
+      const route = getRoute(sn, d);
+      const hasEquip = route.some(proc => (getProc(d, proc).equip || "") === fEquip);
+      if (!hasEquip) return false;
+    }
+    if (fProc) {
+      const route = getRoute(sn, d);
+      if (!route.includes(fProc)) return false;
+    }
+    if (fDate) {
+      let allDates = [];
+      if (fD(d.startDate)) allDates.push(fD(d.startDate));
+      if (fD(d.endDate)) allDates.push(fD(d.endDate));
+      if (fD(d.createdAt)) allDates.push(fD(d.createdAt));
+      const route = getRoute(sn, d);
+      route.forEach(proc => {
+        const p = getProc(d, proc);
+        if (fD(p.planStart)) allDates.push(fD(p.planStart));
+        if (fD(p.planEnd)) allDates.push(fD(p.planEnd));
+        if (fD(p.actualStart)) allDates.push(fD(p.actualStart));
+        if (fD(p.actualEnd)) allDates.push(fD(p.actualEnd));
+      });
+      if (!allDates.includes(fDate)) return false;
     }
     if (search) {
-      const haystack = (sn + ' ' + (d.productName || '') + ' ' + (d.customer || '') + ' ' + (d.batch || d.batchId || '') + ' ' + (d.currentProcess || '')).toLowerCase();
+      const haystack = (sn + " " + (d.productName || "") + " " + (d.customer || "") + " " + (d.batch || d.batchId || "") + " " + (d.currentProcess || "")).toLowerCase();
       if (!haystack.includes(search)) return false;
     }
     return true;
@@ -947,8 +1001,8 @@ window.showProcDropdown = function(e, sn) {
     const isCurrent = proc === current;
     const st = pd.status || '대기';
     const row = document.createElement('div');
-    row.style.cssText = `padding:8px 12px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:8px;font-size:13px;${isCurrent ? 'background:rgba(99,102,241,0.15);font-weight:600' : ''}`;
-    row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${PROC_COLORS[proc] || '#666'}"></span>${esc(proc)}<span style="margin-left:auto;font-size:11px;color:var(--t2)">${esc(st)}</span>`;
+    row.style.cssText = "padding:8px 12px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:8px;font-size:13px;" + (isCurrent ? "background:rgba(99,102,241,0.15);font-weight:600" : "");
+    row.innerHTML = "<span style=\"width:8px;height:8px;border-radius:50%;background:" + (PROC_COLORS[proc] || "#666") + "\"></span>" + esc(proc) + "<span style=\"margin-left:auto;font-size:11px;color:var(--t2)\">" + esc(st) + "</span>";
     row.onmouseenter = () => row.style.background = 'var(--bg4)';
     row.onmouseleave = () => row.style.background = isCurrent ? 'rgba(99,102,241,0.15)' : '';
     row.addEventListener('pointerup', async (ev) => {
@@ -3073,6 +3127,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
+
 
 
 

@@ -141,24 +141,46 @@
         <!-- 워크스페이스 탭 -->
         <div class="tab-content" id="workspaceTab" style="display:none;flex-direction:column">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap" class="ws-toolbar">
-            <div class="tab-btns" style="margin-bottom:0">
-              <button class="tab-btn active" onclick="setWsView('product',this)">제품별</button>
-              <button class="tab-btn" onclick="setWsView('batch',this)">배치별</button>
+          <div class="ws-toolbar" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+            <!-- 1행: 뷰 + 필터 + 펼치기 -->
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <select class="form-input form-select" id="wsViewSelect" onchange="setWsView(this.value)" style="width:90px;padding:5px 8px;font-size:12px;font-weight:600;background:var(--primary);color:#fff;border-color:var(--primary);border-radius:var(--r8)">
+                <option value="product">제품별</option>
+                <option value="batch">배치별</option>
+                <option value="process">공정별</option>
+              </select>
+              <div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>
+              <select class="form-input form-select" id="wsFilterStatus" onchange="renderWorkspace()" style="width:76px;padding:5px 8px;font-size:12px">
+                <option value="">상태</option>
+                <option value="대기">대기</option>
+                <option value="진행">진행</option>
+                <option value="완료">완료</option>
+                <option value="지연">지연</option>
+                <option value="폐기">폐기</option>
+              </select>
+              <select class="form-input form-select" id="wsFilterProduct" onchange="renderWorkspace()" style="width:110px;padding:5px 8px;font-size:12px">
+                <option value="">제품</option>
+              </select>
+              <select class="form-input form-select" id="wsFilterBatch" onchange="renderWorkspace()" style="width:105px;padding:5px 8px;font-size:12px">
+                <option value="">배치</option>
+              </select>
+              <select class="form-input form-select" id="wsFilterEquip" onchange="renderWorkspace()" style="width:90px;padding:5px 8px;font-size:12px">
+                <option value="">설비</option>
+              </select>
+              <select class="form-input form-select" id="wsFilterProc" onchange="renderWorkspace()" style="width:90px;padding:5px 8px;font-size:12px">
+                <option value="">공정</option>
+              </select>
+              <input type="date" class="form-input" id="wsFilterDate" onchange="renderWorkspace()" style="width:140px;padding:5px 8px;font-size:12px" title="완료일">
+              <div style="flex:1"></div>
+              <button class="btn btn-secondary btn-sm" id="expandAllBtn" onclick="toggleAllGroups()" style="white-space:nowrap">모두 펼치기</button>
             </div>
-            <div class="filter-chips">
-              <span class="chip active" data-f="전체" onclick="toggleFilter('전체')">전체</span>
-              <span class="chip" data-f="대기" onclick="toggleFilter('대기')">대기</span>
-              <span class="chip" data-f="진행" onclick="toggleFilter('진행')">진행</span>
-              <span class="chip" data-f="완료" onclick="toggleFilter('완료')">완료</span>
-              <span class="chip" data-f="지연" onclick="toggleFilter('지연')">지연</span>
-              <span class="chip" data-f="폐기" onclick="toggleFilter('폐기')">폐기</span>
-            </div>
-            <div class="search-wrap" style="flex:1;min-width:180px">
+            <!-- 2행: 통합검색 -->
+            <div class="search-wrap" style="width:100%">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input class="form-input search-input" id="wsSearch" placeholder="S/N, 제품명, 고객 검색..." oninput="renderWorkspace()">
+              <input class="form-input search-input" id="wsSearch" placeholder="S/N, 제품명, 고객, 배치, 설비 통합 검색..." oninput="renderWorkspace()">
               <span class="search-count" id="wsSearchCount"></span>
             </div>
-            <button class="btn btn-secondary btn-sm" id="expandAllBtn" onclick="toggleAllGroups()">모두 펼치기</button>
+          </div>
           </div>
           <div id="wsTable" style="flex:1;overflow-y:auto"></div>
           <div id="batchBar" class="batch-bar">
@@ -640,6 +662,7 @@
   <script type="module" src="./js/main.js"></script>
 </body>
 </html>
+
 
 
 
