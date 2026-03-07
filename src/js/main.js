@@ -2874,13 +2874,40 @@ window.downloadQR = function() {
 
     try {
       await FB.setDoc(FB.doc(firebaseDb, "products", name), data);
-      toast("제품 \"" + name + "\" " + (editMode ? "수정" : "등록") + " 완료", "success");
       PRODUCTS[name] = data;
+      toast("제품 \"" + name + "\" " + (editMode ? "수정" : "등록") + " 완료", "success");
+
+      if (editMode) {
+        const snEntries = Object.entries(DATA).filter(([k,v]) => v.productName === name);
+        if (snEntries.length > 0 && confirm("이 제품의 S/N " + snEntries.length + "건의 공정도 새 설정에 맞게 업데이트하시겠습니까?\n\nDC접합: " + dc + "\n공정: " + data.route.join(" → "))) {
+          toast("S/N " + snEntries.length + "건 업데이트 중...", "info");
+          const batch = FB.writeBatch(firebaseDb);
+          let updated = 0;
+          const newRoute = data.route;
+          snEntries.forEach(([sn, d]) => {
+            var ref = FB.doc(firebaseDb, "production", sn);
+            var oldProcs = d.processes || {};
+            var newProcs = {};
+            newRoute.forEach(function(proc, idx) {
+              if (oldProcs[proc]) {
+                newProcs[proc] = oldProcs[proc];
+                newProcs[proc].order = idx + 1;
+              } else {
+                newProcs[proc] = { order: idx + 1, equip: "", status: "대기", startDate: "", planEnd: "", actualEnd: "", planDays: data["d" + (idx+1)] || 0, actualDays: 0, defect: "", remark: "" };
+              }
+            });
+            batch.update(ref, { dcJoint: dc, heatTreat: data.heatTreat ? "Y" : "N", route: newRoute, processes: newProcs, procCount: newRoute.length });
+            updated++;
+          });
+          await batch.commit();
+          toast("S/N " + updated + "건 공정 업데이트 완료", "success");
+        }
+      }
+
       populateProductSelects();
       showProductList();
     } catch (err) { handleFirestoreError(err, "제품 저장"); }
   };
-
   window.deleteProduct = async function(name, snCount) {
     if (snCount > 0) {
       if (!confirm(name + "에 연결된 S/N이 " + snCount + "건 있습니다.\n제품만 삭제되고 S/N 데이터는 유지됩니다.\n정말 삭제하시겠습니까?")) return;
