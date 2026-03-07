@@ -2748,11 +2748,12 @@ window.downloadQR = function() {
 
 // === 제품 등록 ===
 ﻿  window.openProductModal = function() {
-    showProductList();
     openModal('productModal');
+    setTimeout(function(){ showProductList(); }, 100);
   };
 
   window.showProductList = function() {
+    try {
     var lv = document.getElementById('pm_listView');
     var fv = document.getElementById('pm_formView');
     var tt = document.getElementById('pm_title');
