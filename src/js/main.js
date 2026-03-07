@@ -858,7 +858,7 @@ function renderWorkspace() {
       html += `<div class="table-responsive"><table class="table ws-table">
         <thead><tr>
           <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(key)}',this.checked)"></th>
-          <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>납기</th><th>진행률</th>
+          <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
         </tr></thead><tbody>`;
 
       items.forEach(([sn, d]) => {
@@ -3053,3 +3053,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
