@@ -664,9 +664,7 @@ tr:hover td { background: var(--glass); }
   display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; margin-bottom: 12px; flex-shrink: 0;
 }
-.gantt-grid {
-  display: grid;
-  grid-template-columns: 280px 1fr;
+.gantt-grid { display: grid; grid-template-columns: 100px 1fr;
   grid-template-rows: 40px 1fr;
   border: 1px solid var(--border);
   border-radius: var(--r8);
@@ -1030,9 +1028,7 @@ canvas { display: block; }
   max-height: calc(100vh - var(--tb) - 40px);
   overflow: hidden;
 }
-  .gantt-grid {
-  display: grid;
-  grid-template-columns: 280px 1fr;
+  .gantt-grid { display: grid; grid-template-columns: 100px 1fr;
   grid-template-rows: 40px 1fr;
   border: 1px solid var(--border);
   border-radius: var(--r8);
@@ -1107,14 +1103,50 @@ canvas { display: block; }
   #greetMsg { font-size: 16px !important; }
   #greetSub { font-size: 11px !important; }
   #delayAlertCard { margin-bottom: 10px !important; padding: 10px !important; }
+
+  /* 워크스페이스 필터 드롭다운 모바일 */
+  .ws-toolbar select.form-input,
+  .ws-toolbar input[type="date"] {
+    width: auto !important;
+    min-width: 60px !important;
+    max-width: 90px !important;
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+  }
+  .ws-toolbar > div:first-child {
+    gap: 4px !important;
+  }
+  #wsViewSelect { width: 70px !important; }
+  #expandAllBtn { padding: 4px 8px !important; font-size: 10px !important; }
+
+  /* 워크스페이스 테이블 S/N 줄바꿈 방지 */
+  .sn-cell { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px !important; }
+  .proc-cell, .equip-cell { font-size: 11px !important; }
+
+  /* 캘린더 7열 모바일 대응 */
+  .cal-grid { font-size: 9px !important; }
+  .cal-grid > div { padding: 2px !important; min-height: 60px !important; }
+  .cal-dow { font-size: 9px !important; padding: 2px !important; }
+  .cal-event { font-size: 8px !important; padding: 1px 2px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-controls { flex-wrap: wrap; gap: 4px !important; }
+  .cal-controls .tab-btn { padding: 4px 8px !important; font-size: 11px !important; }
+  .cal-summary { font-size: 10px !important; flex-wrap: wrap; gap: 4px !important; }
+  .cal-legend { font-size: 9px !important; flex-wrap: wrap; }
+
+  /* 간트 사이드바 축소 */
+  .gantt-grid { grid-template-columns: 120px 1fr !important; }
+  .gantt-corner { font-size: 10px !important; padding: 4px 6px !important; }
+  .gantt-sb-group { font-size: 11px !important; padding: 4px 6px !important; }
+  .gantt-sb-item { font-size: 10px !important; padding: 4px 6px !important; }
+  .gantt-controls { flex-wrap: wrap !important; gap: 4px !important; }
+  .gantt-controls .tab-btn { padding: 4px 8px !important; font-size: 11px !important; }
+  .gantt-controls select { font-size: 11px !important; }
 }
 
 @media (max-width: 480px) {
   .grid4 { grid-template-columns: 1fr 1fr !important; }
   .kpi-val { font-size: 18px !important; }
-  .gantt-grid {
-  display: grid;
-  grid-template-columns: 280px 1fr;
+  .gantt-grid { display: grid; grid-template-columns: 100px 1fr;
   grid-template-rows: 40px 1fr;
   border: 1px solid var(--border);
   border-radius: var(--r8);
@@ -1145,6 +1177,7 @@ canvas { display: block; }
   .qr-print-item { border: 1px solid #ccc !important; background: #fff !important; padding: 4px !important; break-inside: avoid; }
   .qr-print-item span { color: #000 !important; font-size: 8px !important; }
 }
+
 
 
 
