@@ -401,7 +401,7 @@ End Sub
 ' ────────────────────────────────────────────
 Public Sub PullFromFirebase()
     On Error GoTo ErrH
-    Dim plogLR3 As Long, delR As Long, delProc As String
+    Dim plogLR3 As Long, delR As Long, delProc As String, procJson As String
     Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
     Dim wsPlog As Worksheet: Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
 
@@ -593,14 +593,14 @@ NextDynProc:
             Loop
 
             ' ── Firebase에 없는 공정 행 삭제 ──
-            ' processes 맵에 있는 공정명 목록 수집 (위 Loop에서 파싱한 것)
-            ' ProcLog에서 이 SN의 행 중 Firebase에 없는 공정 삭제
+            ' processes 섹션만 추출하여 검사
+            procJson = ""
+            If procStart > 0 Then procJson = Mid(dJson, procStart, procEndPos - procStart)
             plogLR3 = GetLastRow(wsPlog, PLOG_COL_LOGID)
             For delR = plogLR3 To PLOG_DATA_START Step -1
                 If SafeStr(wsPlog.Cells(delR, PLOG_COL_SN).Value) = sn Then
                     delProc = SafeStr(wsPlog.Cells(delR, PLOG_COL_PROC).Value)
-                    ' Firebase processes에 이 공정이 있는지 확인
-                    If InStr(dJson, Chr(34) & delProc & Chr(34)) = 0 Then
+                    If Len(procJson) > 0 And InStr(procJson, Chr(34) & delProc & Chr(34)) = 0 Then
                         wsPlog.Rows(delR).Delete
                     End If
                 End If
