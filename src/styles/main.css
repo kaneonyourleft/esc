@@ -664,7 +664,7 @@ tr:hover td { background: var(--glass); }
   display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; margin-bottom: 12px; flex-shrink: 0;
 }
-.gantt-grid { display: grid; grid-template-columns: 100px 1fr;
+.gantt-grid { display: grid; grid-template-columns: 80px 1fr;
   grid-template-rows: 40px 1fr;
   border: 1px solid var(--border);
   border-radius: var(--r8);
@@ -1028,7 +1028,7 @@ canvas { display: block; }
   max-height: calc(100vh - var(--tb) - 40px);
   overflow: hidden;
 }
-  .gantt-grid { display: grid; grid-template-columns: 100px 1fr;
+  .gantt-grid { display: grid; grid-template-columns: 80px 1fr;
   grid-template-rows: 40px 1fr;
   border: 1px solid var(--border);
   border-radius: var(--r8);
@@ -1161,19 +1161,29 @@ canvas { display: block; }
 
 
   /* 간트 사이드바 축소 */
-  .gantt-grid { grid-template-columns: 120px 1fr !important; }
+  .gantt-grid { grid-template-columns: 100px 1fr !important; }
   .gantt-corner { font-size: 10px !important; padding: 4px 6px !important; }
   .gantt-sb-group { font-size: 11px !important; padding: 4px 6px !important; }
   .gantt-sb-item { font-size: 10px !important; padding: 4px 6px !important; }
   .gantt-controls { flex-wrap: wrap !important; gap: 4px !important; }
   .gantt-controls .tab-btn { padding: 4px 8px !important; font-size: 11px !important; }
   .gantt-controls select { font-size: 11px !important; }
+
+  .gantt-sb-group, .gantt-sb-item {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    max-width: 100px !important;
+    font-size: 9px !important;
+    padding: 3px 4px !important;
+  }
+  .gantt-corner { width: 100px !important; }
 }
 
 @media (max-width: 480px) {
   .grid4 { grid-template-columns: 1fr 1fr !important; }
   .kpi-val { font-size: 18px !important; }
-  .gantt-grid { display: grid; grid-template-columns: 100px 1fr;
+  .gantt-grid { display: grid; grid-template-columns: 80px 1fr;
   grid-template-rows: 40px 1fr;
   border: 1px solid var(--border);
   border-radius: var(--r8);
@@ -1204,6 +1214,7 @@ canvas { display: block; }
   .qr-print-item { border: 1px solid #ccc !important; background: #fff !important; padding: 4px !important; break-inside: avoid; }
   .qr-print-item span { color: #000 !important; font-size: 8px !important; }
 }
+
 
 
 
