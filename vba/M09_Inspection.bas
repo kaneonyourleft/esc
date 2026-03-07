@@ -1,0 +1,105 @@
+Attribute VB_Name = "M09_Inspection"
+ '================================================================
+' M06_Inspection - NG Ã³¸®
+'================================================================
+Option Explicit
+
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+' NG Æû È£Ãâ
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+Public Sub ShowNGForm()
+    EnterNGMode
+End Sub
+
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+' ProcLog ÇïÆÛ
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+Public Sub WriteProcLog(ws As Worksheet, r As Long, _
+                        proc As String, status As String, _
+                        equip As String, remark As String)
+    Dim sn     As String: sn = SafeStr(ws.Cells(r, PROD_COL_SN).Value)
+    Dim batch  As String: batch = SafeStr(ws.Cells(r, PROD_COL_BATCH).Value)
+    Dim pName  As String: pName = SafeStr(ws.Cells(r, PROD_COL_PRODUCT).Value)
+    Dim pType  As String: pType = SafeStr(ws.Cells(r, PROD_COL_TYPE).Value)
+    Dim route  As String: route = SafeStr(ws.Cells(r, PROD_COL_ROUTE).Value)
+    Dim pOrder As Long:   pOrder = GetProcIndex(route, proc)
+    Dim planD  As Long:   planD = GetProcDaysByName(pName, proc)
+    
+    InsertProcLog sn, batch, pName, pType, proc, pOrder, _
+                  equip, status, "", "", planD
+    
+    If Len(remark) > 0 Then
+        Dim wsPlog As Worksheet
+        Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+        Dim lr As Long
+        lr = GetLastRow(wsPlog, PLOG_COL_LOGID)
+        If lr >= PLOG_DATA_START Then
+            wsPlog.Cells(lr, PLOG_COL_REMARK).Value = remark
+        End If
+    End If
+End Sub
+
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+' ÆòÅºµµNG
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+Public Sub ProcessFlatNG(ws As Worksheet, r As Long, memo As String)
+    Dim c As Long
+    c = SafeLng(ws.Cells(r, PROD_COL_INSP_COUNT).Value) + 1
+    ws.Cells(r, PROD_COL_INSP_COUNT).Value = c
+    AppendMemo ws, r, "ÆòÅºµµNG #" & c, memo
+    
+    If c > NG_MAX_FLAT Then
+        ws.Cells(r, PROD_COL_STATUS).Value = ST_SCRAP
+        AppendMemo ws, r, "ÀÚµ¿Æó±â", "ÆòÅºÈ­ " & c & "È¸ ÃÊ°ú"
+        WriteProcLog ws, r, PROC_FLATTENING, ST_SCRAP, "", _
+                     "ÆòÅºÈ­ " & c & "È¸ ÃÊ°ú ÀÚµ¿Æó±â"
+    Else
+        ws.Cells(r, PROD_COL_PROCESS).Value = PROC_FLATTENING
+        ws.Cells(r, PROD_COL_STATUS).Value = ST_WAIT
+        ws.Cells(r, PROD_COL_START).Value = ""
+        ws.Cells(r, PROD_COL_END).Value = ""
+        WriteProcLog ws, r, PROC_FLATTENING, ST_WAIT, "", _
+                     "ÀçÆòÅºÈ­ #" & c & " " & memo
+    End If
+End Sub
+
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+' ¼±°¡°ø
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+Public Sub ProcessSubNG(ws As Worksheet, r As Long, memo As String)
+    ws.Cells(r, PROD_COL_PROCESS).Value = NG_SUB
+    ws.Cells(r, PROD_COL_STATUS).Value = ST_WAIT
+    ws.Cells(r, PROD_COL_EQUIP).Value = "¿ÜÁÖ"
+    ws.Cells(r, PROD_COL_START).Value = ""
+    ws.Cells(r, PROD_COL_END).Value = ""
+    AppendMemo ws, r, "¼±°¡°øÀüÈ¯", memo
+    WriteProcLog ws, r, NG_SUB, ST_WAIT, "¿ÜÁÖ", "¼±°¡°ø ÀüÈ¯ " & memo
+End Sub
+
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+' Æó±â
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+Public Sub ProcessScrapNG(ws As Worksheet, r As Long, memo As String)
+    Dim curProc As String
+    curProc = SafeStr(ws.Cells(r, PROD_COL_PROCESS).Value)
+    ws.Cells(r, PROD_COL_STATUS).Value = ST_SCRAP
+    AppendMemo ws, r, "Æó±â", memo
+    WriteProcLog ws, r, curProc, ST_SCRAP, "", "¼öµ¿Æó±â " & memo
+End Sub
+
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+' ¸Þ¸ð ´©Àû
+'¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+Public Sub AppendMemo(ws As Worksheet, r As Long, tag As String, memo As String)
+    Dim old As String
+    old = SafeStr(ws.Cells(r, PROD_COL_INSP_MEMO).Value)
+    Dim nw As String
+    nw = Format(Now, "MM/DD") & " [" & tag & "]"
+    If Len(memo) > 0 Then nw = nw & " " & memo
+    If Len(old) > 0 Then
+        ws.Cells(r, PROD_COL_INSP_MEMO).Value = nw & " | " & old
+    Else
+        ws.Cells(r, PROD_COL_INSP_MEMO).Value = nw
+    End If
+End Sub
+

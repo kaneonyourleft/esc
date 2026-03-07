@@ -1,0 +1,1770 @@
+Attribute VB_Name = "M01_Config"
+'================================================================
+' M01_Config ? ESC Production Management System v12.1
+' v12 기능 유지 + v11 디자인 (색채우기 최소, 선/테두리 활용)
+'================================================================
+Option Explicit
+
+'────────────────────────────────────────────────────────────────
+' 시트명 상수
+'────────────────────────────────────────────────────────────────
+Public Const SHT_WORKSPACE  As String = "Work Space"
+Public Const SHT_CALENDAR   As String = "Calendar"
+Public Const SHT_PRODUCT    As String = "Product"
+Public Const SHT_PRODUCTION As String = "Production"
+Public Const SHT_PROCLOG    As String = "ProcLog"
+Public Const SHT_REPORT     As String = "Report"
+Public Const SHT_ARCHIVE    As String = "Archive"
+
+'────────────────────────────────────────────────────────────────
+' 모드 / 뷰 / 행타입 / 상태 / 공정 상수
+'────────────────────────────────────────────────────────────────
+Public Const MODE_NONE  As String = ""
+Public Const MODE_EDIT  As String = "EDIT"
+Public Const MODE_SCRAP As String = "SCRAP"
+
+Public Const VIEW_BATCH   As String = "배치별"
+Public Const VIEW_PROCESS As String = "공정별"
+
+Public Const RTYPE_BATCH        As String = "BATCH"
+Public Const RTYPE_PRODUCT      As String = "PRODUCT"
+Public Const RTYPE_SN           As String = "SN"
+Public Const RTYPE_PROC_GROUP   As String = "PROC_GROUP"
+Public Const RTYPE_EQUIP        As String = "EQUIP"
+Public Const RTYPE_PROD_SUMMARY As String = "PROD_SUMMARY"
+
+Public Const ST_WAIT  As String = "대기"
+Public Const ST_PROG  As String = "진행"
+Public Const ST_DONE  As String = "완료"
+Public Const ST_DELAY As String = "지연"
+Public Const ST_SCRAP As String = "폐기"
+
+
+
+Public Const PROC_DEGREASING As String = "탈지"
+Public Const PROC_SINTERING  As String = "소성"
+Public Const PROC_REDUCTION  As String = "환원소성"
+Public Const PROC_FLATTENING As String = "평탄화"
+Public Const PROC_PLATING    As String = "도금"
+Public Const PROC_HEATTREAT  As String = "열처리"
+
+'────────────────────────────────────────────────────────────────
+' 사이드바 상수
+'────────────────────────────────────────────────────────────────
+Public Const SIDEBAR_WIDTH As Long = 130
+Public Const SIDEBAR_ITEMS As String = "Work Space,Calendar,Product,Report,Archive"
+
+'────────────────────────────────────────────────────────────────
+' 타이틀 도형 상수
+'────────────────────────────────────────────────────────────────
+Public Const TITLE_SHAPE_PREFIX As String = "SHP_TITLE"
+Public Const TITLE_SUB_PREFIX   As String = "SHP_SUBTITLE"
+Public Const TITLE_SHAPE_H      As Long = 18
+Public Const TITLE_SUB_H        As Long = 10
+Public Const TITLE_FONT_NAME    As String = "맑은 고딕"
+
+'────────────────────────────────────────────────────────────────
+' 색상 팔레트
+'────────────────────────────────────────────────────────────────
+' 배경
+Public Const CLR_BG_DARK  As Long = 2563870
+Public Const CLR_BG_MID   As Long = 3616044
+Public Const CLR_BG_LIGHT As Long = 4668218
+Public Const CLR_BG_CARD  As Long = 4013373
+Public Const CLR_SIDEBAR  As Long = 2105376
+
+' 텍스트
+Public Const CLR_TEXT_WHITE As Long = 15658734
+Public Const CLR_TEXT_LIGHT As Long = 12632256
+Public Const CLR_TEXT_MID   As Long = 10066329
+Public Const CLR_TEXT_DIM   As Long = 5921370
+Public Const CLR_TEXT_HINT  As Long = 8421504
+Public Const CLR_TEXT_DARK  As Long = 2105376
+
+' 액센트
+Public Const CLR_BLUE   As Long = 14912512
+Public Const CLR_GREEN  As Long = 5296128
+Public Const CLR_RED    As Long = 4474111
+Public Const CLR_ORANGE As Long = 3573503
+Public Const CLR_PURPLE As Long = 14702666
+Public Const CLR_CYAN   As Long = 14911564
+Public Const CLR_YELLOW As Long = 5765887
+Public Const CLR_WHITE  As Long = 16777215
+
+' 상태 뱃지 (v12.1: 배경 제거, 텍스트+테두리만)
+Public Const CLR_BADGE_WAIT_BG  As Long = 5263440
+Public Const CLR_BADGE_WAIT_TX  As Long = 12632256
+Public Const CLR_BADGE_PROG_BG  As Long = 14912512
+Public Const CLR_BADGE_DONE_BG  As Long = 5296128
+Public Const CLR_BADGE_DELAY_BG As Long = 4474111
+Public Const CLR_BADGE_SCRAP_BG As Long = 3355443
+Public Const CLR_BADGE_SCRAP_TX As Long = 8421504
+
+' Gantt 바
+Public Const CLR_BAR_DONE      As Long = 5296128
+Public Const CLR_BAR_REMAIN    As Long = 5263440
+Public Const CLR_BAR_OVERDUE   As Long = 4474111
+Public Const CLR_BAR_WAITING   As Long = 3616044
+Public Const CLR_BAR_COMPLETE  As Long = 7451452
+Public Const CLR_GANTT_DIVIDER As Long = 5263440
+
+' 공정별 dimmed 색상
+Public Const CLR_PROC_DIM_DEGREASE As Long = 4602910
+Public Const CLR_PROC_DIM_SINTER   As Long = 1980230
+Public Const CLR_PROC_DIM_REDUCE   As Long = 4596540
+Public Const CLR_PROC_DIM_FLATTEN  As Long = 2636830
+Public Const CLR_PROC_DIM_PLATE    As Long = 2310465
+Public Const CLR_PROC_DIM_HEAT     As Long = 2302790
+
+'────────────────────────────────────────────────────────────────
+' Product 시트 열 인덱스
+'────────────────────────────────────────────────────────────────
+Public Const PRD_HDR_ROW    As Long = 5
+Public Const PRD_DATA_START As Long = 6
+Public Const PRD_COL_TYPE    As Long = 3
+Public Const PRD_COL_NAME    As Long = 4
+Public Const PRD_COL_DRAWING As Long = 5
+Public Const PRD_COL_SHRINK  As Long = 6
+Public Const PRD_COL_STACK   As Long = 7
+Public Const PRD_COL_DC      As Long = 8
+Public Const PRD_COL_HEAT    As Long = 9
+Public Const PRD_COL_D1      As Long = 10
+Public Const PRD_COL_D2      As Long = 11
+Public Const PRD_COL_D3      As Long = 12
+Public Const PRD_COL_D4      As Long = 13
+Public Const PRD_COL_D5      As Long = 14
+Public Const PRD_COL_D6      As Long = 15
+Public Const PRD_COL_LT      As Long = 16
+Public Const PRD_COL_ROUTE   As Long = 17
+Public Const PRD_COL_REGDATE As Long = 18
+
+'────────────────────────────────────────────────────────────────
+' Production 시트 열 인덱스
+'────────────────────────────────────────────────────────────────
+Public Const PROD_HDR_ROW    As Long = 5
+Public Const PROD_DATA_START As Long = 6
+Public Const PROD_COL_BATCH    As Long = 3
+Public Const PROD_COL_SN       As Long = 4
+Public Const PROD_COL_TYPE     As Long = 5
+Public Const PROD_COL_PRODUCT  As Long = 6
+Public Const PROD_COL_DRAWING  As Long = 7
+Public Const PROD_COL_SHRINK   As Long = 8
+Public Const PROD_COL_STACK    As Long = 9
+Public Const PROD_COL_DC       As Long = 10
+Public Const PROD_COL_HEAT     As Long = 11
+Public Const PROD_COL_EQUIP    As Long = 12
+Public Const PROD_COL_PROCESS  As Long = 13
+Public Const PROD_COL_STATUS   As Long = 14
+Public Const PROD_COL_START    As Long = 15
+Public Const PROD_COL_END      As Long = 16
+Public Const PROD_COL_PROGRESS As Long = 17
+Public Const PROD_COL_ROUTE    As Long = 18
+Public Const PROD_COL_SHEETNO  As Long = 19
+Public Const PROD_COL_REGDATE  As Long = 20
+Public Const PROD_COL_DEFECT   As Long = 21
+Public Const PROD_COL_DEFPROC  As Long = 22
+Public Const PROD_COL_DPLUS    As Long = 23
+
+' Production 별칭
+Public Const PROD_COL_NAME  As Long = 6
+Public Const PROD_COL_PROC  As Long = 13
+Public Const PROD_COL_SDATE As Long = 15
+Public Const PROD_COL_EDATE As Long = 16
+Public Const PROD_COL_PROG  As Long = 17
+
+'────────────────────────────────────────────────────────────────
+' ProcLog 시트 열 인덱스
+'────────────────────────────────────────────────────────────────
+Public Const PLOG_HDR_ROW    As Long = 5
+Public Const PLOG_DATA_START As Long = 6
+Public Const PLOG_COL_LOGID    As Long = 3
+Public Const PLOG_COL_SN       As Long = 4
+Public Const PLOG_COL_BATCH    As Long = 5
+Public Const PLOG_COL_NAME     As Long = 6
+Public Const PLOG_COL_TYPE     As Long = 7
+Public Const PLOG_COL_PROC     As Long = 8
+Public Const PLOG_COL_ORDER    As Long = 9
+Public Const PLOG_COL_EQUIP    As Long = 10
+Public Const PLOG_COL_STATUS   As Long = 11
+Public Const PLOG_COL_SDATE    As Long = 12
+Public Const PLOG_COL_PLANEND  As Long = 13
+Public Const PLOG_COL_ACTEND   As Long = 14
+Public Const PLOG_COL_PLANDAYS As Long = 15
+Public Const PLOG_COL_ACTDAYS  As Long = 16
+Public Const PLOG_COL_DEFECT   As Long = 17
+Public Const PLOG_COL_REMARK   As Long = 18
+Public Const PLOG_COL_LOGTIME  As Long = 19
+
+'────────────────────────────────────────────────────────────────
+' Archive 시트 열 인덱스
+'────────────────────────────────────────────────────────────────
+Public Const ARC_HDR_ROW    As Long = 5
+Public Const ARC_DATA_START As Long = 6
+Public Const ARC_COL_BATCH     As Long = 3
+Public Const ARC_COL_SN        As Long = 4
+Public Const ARC_COL_TYPE      As Long = 5
+Public Const ARC_COL_NAME      As Long = 6
+Public Const ARC_COL_DRAWING   As Long = 7
+Public Const ARC_COL_LASTPROC  As Long = 8
+Public Const ARC_COL_LASTEQUIP As Long = 9
+Public Const ARC_COL_STATUS    As Long = 10
+Public Const ARC_COL_FIRSTDATE As Long = 11
+Public Const ARC_COL_LASTDATE  As Long = 12
+Public Const ARC_COL_COMPLDATE As Long = 13
+Public Const ARC_COL_ROUTE     As Long = 14
+Public Const ARC_COL_PROG      As Long = 15
+Public Const ARC_COL_ARCDATE   As Long = 16
+
+
+
+'────────────────────────────────────────────────────────────────
+' Work Space 시트 상수 (★ 열 압축 버전)
+'────────────────────────────────────────────────────────────────
+Public Const WS_ROW_TITLE      As Long = 2
+Public Const WS_ROW_SUBTITLE   As Long = 3
+Public Const WS_ROW_BUTTONS    As Long = 4
+Public Const WS_ROW_MODEBAR    As Long = 5
+Public Const WS_ROW_FILT_LABEL As Long = 6
+Public Const WS_ROW_FILTER     As Long = 7
+Public Const WS_ROW_GANTT_DOW  As Long = 8
+Public Const WS_DATA_START     As Long = 9
+
+Public Const FLT_COL_VIEW    As Long = 5
+Public Const FLT_COL_PRODUCT As Long = 6
+Public Const FLT_COL_BATCH   As Long = 7
+Public Const FLT_COL_SN      As Long = 8
+Public Const FLT_COL_PROC    As Long = 9
+Public Const FLT_COL_EQUIP   As Long = 10
+Public Const FLT_COL_STATUS  As Long = 11
+
+Public Const WS_COL_CHK    As Long = 3
+Public Const WS_COL_TOG    As Long = 4
+Public Const WS_COL_MAIN   As Long = 5
+Public Const WS_COL_QTY    As Long = 6
+Public Const WS_COL_PROC   As Long = 7
+Public Const WS_COL_EQUIP  As Long = 8
+Public Const WS_COL_STATUS As Long = 9
+Public Const WS_COL_SDATE  As Long = 10
+Public Const WS_COL_EDATE  As Long = 11
+Public Const WS_COL_PROG   As Long = 12
+Public Const WS_COL_DPLUS  As Long = 13
+Public Const WS_COL_SPINUP As Long = 14
+Public Const WS_COL_SPINDN As Long = 15
+Public Const WS_COL_DIV    As Long = 16
+
+Public Const GNT_START_COL As Long = 17
+Public Const GNT_TODAY_COL As Long = 18
+Public Const GNT_END_COL   As Long = 48
+Public Const GNT_DAYS      As Long = 32
+
+Public Const META_TYPE     As Long = 49
+Public Const META_KEY1     As Long = 50
+Public Const META_KEY2     As Long = 51
+Public Const META_KEY3     As Long = 52
+Public Const META_PRDROW   As Long = 53
+Public Const META_BASEDATE As Long = 54
+Public Const META_CROSS_R  As Long = 55
+Public Const META_CROSS_C  As Long = 56
+
+'★ 접기/펼치기
+Public Const WS_VIEW_COLLAPSED As String = "COLLAPSED"
+Public Const WS_VIEW_EXPANDED  As String = "EXPANDED"
+
+Public Const WS_CW_MAIN_COLL   As Double = 22
+Public Const WS_CW_QTY_COLL    As Double = 4
+Public Const WS_CW_PROC_COLL   As Double = 0
+Public Const WS_CW_EQUIP_COLL  As Double = 0
+Public Const WS_CW_STATUS_COLL As Double = 5
+Public Const WS_CW_SDATE_COLL  As Double = 9
+Public Const WS_CW_EDATE_COLL  As Double = 9
+Public Const WS_CW_PROG_COLL   As Double = 5
+Public Const WS_CW_DPLUS_COLL  As Double = 0
+Public Const WS_CW_SPIN_COLL   As Double = 0
+
+Public Const WS_CW_MAIN_EXP   As Double = 26
+Public Const WS_CW_QTY_EXP    As Double = 5
+Public Const WS_CW_PROC_EXP   As Double = 9
+Public Const WS_CW_EQUIP_EXP  As Double = 8
+Public Const WS_CW_STATUS_EXP As Double = 6
+Public Const WS_CW_SDATE_EXP  As Double = 10
+Public Const WS_CW_EDATE_EXP  As Double = 10
+Public Const WS_CW_PROG_EXP   As Double = 6
+Public Const WS_CW_DPLUS_EXP  As Double = 5
+Public Const WS_CW_SPIN_EXP   As Double = 2.5
+'────────────────────────────────────────────────────────────────
+' 검사 관련 상수
+'────────────────────────────────────────────────────────────────
+Public Const NG_FLAT        As String = "평탄도NG"
+Public Const NG_SUB         As String = "선가공"
+Public Const NG_SCRAP       As String = "폐기"
+Public Const NG_MAX_FLAT    As Long = 5
+Public Const MODE_NG        As String = "NG"
+
+Public Const PROD_COL_INSP_COUNT  As Long = 24   ' 평탄화 횟수
+Public Const PROD_COL_INSP_MEMO   As Long = 25   ' 검사 메모
+
+
+' ── 이슈보드 ──
+Public Const CAL_ISSUE_TOP_ROW   As Long = 3      '도형 시작 위치 (행)
+Public Const CAL_ISSUE_COL       As Long = 9       'I열
+Public Const CAL_ISSUE_WIDTH     As Single = 280   '도형 너비
+Public Const CAL_ISSUE_CARD_H    As Single = 18    '항목당 높이
+Public Const CAL_ISSUE_PAD       As Single = 40    '헤더+여백
+Public Const CAL_ISSUE_GAP       As Single = 8     '카드 간격
+
+Public g_IssueBoardExpanded As Boolean   ' 기본값 False = 접힌 상태
+
+Public Const CAL_MEMO_STORE_COL  As Long = 27  'AA열 - 제품명
+Public Const CAL_MEMO_STORE_COL2 As Long = 28  'AB열 - S/N
+Public Const CAL_MEMO_STORE_COL3 As Long = 29  'AC열 - 메모내용
+Public Const CAL_MEMO_STORE_COL4 As Long = 30  'AD열 - 날짜
+Public Const CAL_MEMO_STORE_START As Long = 2  '데이터 시작행
+
+
+'────────────────────────────────────────────────────────────────
+' Calendar 시트 상수
+'────────────────────────────────────────────────────────────────
+'──────────────
+Public Const CAL_COL_START         As Long = 3
+Public Const CAL_COL_END           As Long = 9
+Public Const CAL_ROW_TITLE         As Long = 2
+Public Const CAL_ROW_KPI           As Long = 3
+Public Const CAL_ROW_MEMO          As Long = 4
+Public Const CAL_ROW_MONTHTITLE    As Long = 6
+Public Const CAL_ROW_DOW           As Long = 7
+Public Const CAL_ROW_GRID_START    As Long = 8
+Public Const CAL_ROWS_PER_WEEK     As Long = 7         '★ 6→7
+Public Const CAL_MAX_ITEMS_PER_DAY As Long = 4          '★ 3→4
+Public Const CAL_WEEKS             As Long = 5
+Public Const CAL_DETAIL_COL        As Long = 11
+Public Const CAL_DETAIL_WIDTH      As Long = 4
+Public Const CAL_DETAIL_ROW_START  As Long = 6
+'────────────────────────────────────────────────────────────────
+' 전역 변수
+'────────────────────────────────────────────────────────────────
+Public g_CurrentMode    As String
+Public g_CurrentView    As String
+Public g_GanttBaseDate  As Date
+Public g_EventsDisabled As Boolean
+Public g_ExpandedKeys   As Object
+Public g_CalendarMonth  As Date
+
+'────────────────────────────────────────────────────────────────
+' DisableEvents / EnableEvents
+'────────────────────────────────────────────────────────────────
+Public Sub DisableEvents()
+    g_EventsDisabled = True
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+End Sub
+
+Public Sub EnableEvents()
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    g_EventsDisabled = False
+End Sub
+
+'────────────────────────────────────────────────────────────────
+' EnsureSheet
+'────────────────────────────────────────────────────────────────
+Public Function EnsureSheet(shtName As String) As Worksheet
+    Dim ws As Worksheet
+    Dim bFound As Boolean
+    On Error GoTo ErrH
+    bFound = False
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = shtName Then
+            bFound = True
+            Set EnsureSheet = ws
+            Exit Function
+        End If
+    Next ws
+    If Not bFound Then
+        Set ws = ThisWorkbook.Worksheets.Add( _
+                     After:=ThisWorkbook.sheets(ThisWorkbook.sheets.count))
+        ws.Name = shtName
+        Set EnsureSheet = ws
+    End If
+    Exit Function
+ErrH:
+    MsgBox "EnsureSheet 오류: " & Err.Description, vbExclamation
+End Function
+
+'────────────────────────────────────────────────────────────────
+' ApplyDarkThemeToSheet
+'────────────────────────────────────────────────────────────────
+Public Sub ApplyDarkThemeToSheet(ws As Worksheet)
+    On Error GoTo ErrH
+    With ws
+        .Tab.Color = CLR_BG_DARK
+        .Cells.Interior.Color = CLR_BG_DARK
+        .Cells.Font.Color = CLR_TEXT_LIGHT
+        .Cells.Font.Name = "에스코어 드림 6 Bold"
+        .Cells.Font.Size = 9
+        .Cells.Borders.lineStyle = xlNone
+    End With
+    ws.DisplayPageBreaks = False
+    Exit Sub
+ErrH:
+    MsgBox "ApplyDarkThemeToSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+' ApplySheetUI: 다크테마 + 그리드/헤딩
+'────────────────────────────────────────────────────────────────
+Public Sub ApplySheetUI(ws As Worksheet)
+    On Error Resume Next
+    ApplyDarkThemeToSheet ws
+    ws.Activate
+    ActiveWindow.DisplayGridlines = False
+    ActiveWindow.DisplayHeadings = True
+    On Error GoTo 0
+End Sub
+
+
+
+'================================================================
+' 도형 타이틀 (v12 기능 유지, v11 디자인)
+'================================================================
+
+Private Sub DeleteTitleShapes(ws As Worksheet)
+    Dim i As Long
+    For i = ws.Shapes.count To 1 Step -1
+        Dim sn As String: sn = ws.Shapes(i).Name
+        If Left(sn, Len(TITLE_SHAPE_PREFIX)) = TITLE_SHAPE_PREFIX Or _
+           Left(sn, Len(TITLE_SUB_PREFIX)) = TITLE_SUB_PREFIX Then
+            ws.Shapes(i).Delete
+        End If
+    Next i
+End Sub
+
+'────────────────────────────────────────────────────────────────
+' DrawTitleShape: v11 스타일 ? 배경 채우기 없음, 좌측 액센트 바 + 텍스트만
+'────────────────────────────────────────────────────────────────
+Public Sub DrawTitleShape(ws As Worksheet, titleText As String, _
+                          Optional subText As String = "", _
+                          Optional accentColor As Long = -1)
+    Dim shpMain As Shape
+    Dim shpSub  As Shape
+    Dim shpBar  As Shape
+    Dim leftPos As Single
+    Dim topPos  As Single
+    Dim titleW  As Single
+    Dim barH    As Single
+    Dim subTop  As Single
+    Dim clrAccent As Long
+    On Error GoTo ErrH
+
+    DeleteTitleShapes ws
+
+    If accentColor = -1 Then clrAccent = CLR_CYAN Else clrAccent = accentColor
+
+    leftPos = ws.Columns(1).Width + ws.Columns(2).Width + 4
+    topPos = ws.rows(1).Height + 2
+
+    titleW = Len(titleText) * 8 + 40
+    If titleW < 200 Then titleW = 200
+    If titleW > 360 Then titleW = 360
+
+    ' ── 메인 타이틀: 배경 없음, 텍스트만 ──
+    Set shpMain = ws.Shapes.AddShape(msoShapeRectangle, _
+                      leftPos + 8, topPos, titleW, CSng(TITLE_SHAPE_H))
+    With shpMain
+        .Name = TITLE_SHAPE_PREFIX & "_MAIN"
+        .Placement = xlFreeFloating
+        .Fill.Visible = msoFalse          ' ★ 배경 채우기 없음
+        .line.Visible = msoFalse
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            .MarginLeft = 4
+            .MarginRight = 6
+            .MarginTop = 0
+            .MarginBottom = 0
+            .WordWrap = msoFalse
+            With .TextRange
+                .text = titleText
+                With .Font
+                    .Size = 11
+                    .Name = TITLE_FONT_NAME
+                    .Bold = msoTrue
+                    .Fill.ForeColor.RGB = CLR_TEXT_WHITE
+                End With
+                .ParagraphFormat.Alignment = msoAlignLeft
+            End With
+        End With
+        .Shadow.Visible = msoFalse
+        .Locked = True
+    End With
+
+    ' ── 좌측 액센트 바 (유일한 시각적 강조) ──
+    barH = CSng(TITLE_SHAPE_H)
+    If Len(subText) > 0 Then barH = CSng(TITLE_SHAPE_H) + CSng(TITLE_SUB_H) + 1
+
+    Set shpBar = ws.Shapes.AddShape(msoShapeRectangle, _
+                     leftPos, topPos, 3, barH)
+    With shpBar
+        .Name = TITLE_SHAPE_PREFIX & "_BAR"
+        .Placement = xlFreeFloating
+        .Fill.ForeColor.RGB = clrAccent
+        .line.Visible = msoFalse
+        .Locked = True
+    End With
+
+    ' ── 서브타이틀: 배경 없음 ──
+    If Len(subText) > 0 Then
+        subTop = topPos + CSng(TITLE_SHAPE_H) + 1
+        Set shpSub = ws.Shapes.AddShape(msoShapeRectangle, _
+                         leftPos + 12, subTop, titleW, CSng(TITLE_SUB_H))
+        With shpSub
+            .Name = TITLE_SUB_PREFIX & "_SUB"
+            .Placement = xlFreeFloating
+            .Fill.Visible = msoFalse
+            .line.Visible = msoFalse
+            With .TextFrame2
+                .VerticalAnchor = msoAnchorTop
+                .MarginLeft = 0
+                .MarginTop = 0
+                .WordWrap = msoFalse
+                With .TextRange
+                    .text = subText
+                    With .Font
+                        .Size = 7
+                        .Name = TITLE_FONT_NAME
+                        .Bold = msoFalse
+                        .Fill.ForeColor.RGB = CLR_TEXT_DIM
+                    End With
+                    .ParagraphFormat.Alignment = msoAlignLeft
+                End With
+            End With
+            .Locked = True
+        End With
+    End If
+    Exit Sub
+ErrH:
+End Sub
+
+'================================================================
+' 시트별 Setup
+'================================================================
+
+'── 공통 헤더행 서식: 채우기 없음, 하단 테두리만 ──
+Private Sub FormatHeaderCell(c As Range)
+    With c
+        .Font.Size = 9
+        .Font.Bold = True
+        .Font.Color = CLR_TEXT_MID
+        .Interior.Color = CLR_BG_DARK           ' ★ 배경 = 다크 (채우기 없는 것처럼)
+        .Borders(xlEdgeBottom).lineStyle = xlContinuous
+        .Borders(xlEdgeBottom).Color = CLR_TEXT_DIM
+        .Borders(xlEdgeBottom).Weight = xlThin   ' ★ Hairline → Thin (좀 더 선명)
+        .HorizontalAlignment = xlCenter
+    End With
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupWorkSpaceSheet(ws As Worksheet)
+    Dim c As Long
+    On Error GoTo ErrH
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 8 / 7
+    ws.Columns(WS_COL_CHK).ColumnWidth = 3.5
+    ws.Columns(WS_COL_TOG).ColumnWidth = 3
+    ws.Columns(WS_COL_MAIN).ColumnWidth = 26
+    ws.Columns(WS_COL_QTY).ColumnWidth = 5
+    ws.Columns(WS_COL_PROC).ColumnWidth = 9
+    ws.Columns(WS_COL_EQUIP).ColumnWidth = 8
+    ws.Columns(WS_COL_STATUS).ColumnWidth = 6
+    ws.Columns(WS_COL_SDATE).ColumnWidth = 10
+    ws.Columns(WS_COL_EDATE).ColumnWidth = 10
+    ws.Columns(WS_COL_PROG).ColumnWidth = 6
+    ws.Columns(WS_COL_DPLUS).ColumnWidth = 5
+    ws.Columns(WS_COL_SPINUP).ColumnWidth = 2.5
+    ws.Columns(WS_COL_SPINDN).ColumnWidth = 2.5
+    ws.Columns(WS_COL_DIV).ColumnWidth = 0.5
+
+    For c = GNT_START_COL To GNT_END_COL
+        ws.Columns(c).ColumnWidth = 2.8
+    Next c
+
+    For c = META_TYPE To META_CROSS_C
+        ws.Columns(c).Hidden = True
+    Next c
+
+    ws.rows(1).rowHeight = 6
+    ws.rows(WS_ROW_TITLE).rowHeight = 20
+    ws.rows(WS_ROW_SUBTITLE).rowHeight = 11
+    ws.rows(WS_ROW_BUTTONS).rowHeight = 30
+    ws.rows(WS_ROW_MODEBAR).rowHeight = 4
+    ws.rows(WS_ROW_FILT_LABEL).rowHeight = 14    ' ★ 라벨행
+    ws.rows(WS_ROW_FILTER).rowHeight = 20         ' ★ 필터행
+    ws.rows(WS_ROW_GANTT_DOW).rowHeight = 14
+
+    ' 타이틀 도형
+    ws.Cells(WS_ROW_TITLE, WS_COL_MAIN).Value = ""
+    ws.Cells(WS_ROW_SUBTITLE, WS_COL_MAIN).Value = ""
+    DrawTitleShape ws, "ESC Production Management", _
+               "Ceramic Electrostatic Chuck Production System v12.1", CLR_CYAN
+
+    ' ★ 필터 라벨행 (6행)
+    Dim labels As Variant
+    labels = Array("뷰", "제품", "배치", "S/N", "공정", "호기", "상태")
+    For c = 0 To UBound(labels)
+        With ws.Cells(WS_ROW_FILT_LABEL, FLT_COL_VIEW + c)
+            .Value = labels(c)
+            .Font.Size = 7
+            .Font.Bold = True
+            .Font.Color = CLR_TEXT_DIM
+            .HorizontalAlignment = xlCenter
+            .Interior.Color = CLR_BG_DARK
+        End With
+    Next c
+
+    ' ★ 필터값행 (7행)
+    ' 뷰모드
+    ws.Cells(WS_ROW_FILTER, FLT_COL_VIEW).Value = VIEW_BATCH
+    AddDataValidation ws.Cells(WS_ROW_FILTER, FLT_COL_VIEW), VIEW_BATCH & "," & VIEW_PROCESS
+
+    ' 공정
+    ws.Cells(WS_ROW_FILTER, FLT_COL_PROC).Value = "전체"
+    AddDataValidation ws.Cells(WS_ROW_FILTER, FLT_COL_PROC), _
+        "전체," & PROC_DEGREASING & "," & PROC_SINTERING & "," & PROC_REDUCTION & _
+        "," & PROC_FLATTENING & "," & PROC_PLATING & "," & PROC_HEATTREAT
+
+    ' 상태
+    ws.Cells(WS_ROW_FILTER, FLT_COL_STATUS).Value = "전체"
+    AddDataValidation ws.Cells(WS_ROW_FILTER, FLT_COL_STATUS), _
+        "전체," & ST_WAIT & "," & ST_PROG & "," & ST_DONE & "," & ST_DELAY
+
+    ' 제품/배치/S/N/호기 초기값
+    ws.Cells(WS_ROW_FILTER, FLT_COL_PRODUCT).Value = "전체"
+    ws.Cells(WS_ROW_FILTER, FLT_COL_BATCH).Value = "전체"
+    ws.Cells(WS_ROW_FILTER, FLT_COL_SN).Value = "전체"
+    ws.Cells(WS_ROW_FILTER, FLT_COL_EQUIP).Value = "전체"
+
+    ' 필터행 스타일
+    For c = FLT_COL_VIEW To FLT_COL_STATUS
+        With ws.Cells(WS_ROW_FILTER, c)
+            .Font.Size = 9
+            .Font.Bold = True
+            .Font.Color = CLR_TEXT_MID
+            .HorizontalAlignment = xlCenter
+            .Interior.Color = CLR_BG_DARK
+            With .Borders(xlEdgeBottom)
+                .lineStyle = xlContinuous
+                .Color = CLR_TEXT_DIM
+                .Weight = xlHairline
+            End With
+        End With
+    Next c
+    
+    ApplyWSColumnWidths ws, False
+    
+    ' 간트 영역 필터행 하단 구분선
+    Dim fc As Long
+    For fc = GNT_START_COL To GNT_END_COL
+        With ws.Cells(WS_ROW_FILTER, fc).Borders(xlEdgeBottom)
+            .lineStyle = xlContinuous
+            .Color = CLR_TEXT_DIM
+            .Weight = xlHairline
+        End With
+    Next fc
+
+    Exit Sub
+ErrH:
+    MsgBox "SetupWorkSpaceSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupProductSheet(ws As Worksheet)
+    Dim headers As Variant
+    Dim c As Long
+    On Error GoTo ErrH
+
+    headers = Array("구분", "제품명", "도면번호", "수축률", "적층수량", "DC접합", "열처리", _
+                    "D1(탈지)", "D2(소성)", "D3(환원소성)", "D4(평탄화)", "D5(도금)", _
+                    "D6(열처리)", "LT합계", "Route", "등록일")
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 8 / 7
+
+    ws.rows(1).rowHeight = 6
+    ws.rows(2).rowHeight = 20
+    ws.rows(3).rowHeight = 11
+
+    For c = 0 To UBound(headers)
+        ws.Cells(PRD_HDR_ROW, PRD_COL_TYPE + c).Value = headers(c)
+        FormatHeaderCell ws.Cells(PRD_HDR_ROW, PRD_COL_TYPE + c)
+    Next c
+
+    DrawTitleShape ws, "PRODUCT MASTER", "제품 마스터 관리", CLR_GREEN
+    Exit Sub
+ErrH:
+    MsgBox "SetupProductSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupProductionSheet(ws As Worksheet)
+    Dim headers As Variant
+    Dim c As Long
+    On Error GoTo ErrH
+
+    '★ 24,25,26열 추가
+    headers = Array("배치코드", "S/N", "구분", "제품명", "도면번호", "수축률", _
+                    "적층수량", "DC접합", "열처리", "설비", "공정", "상태", _
+                    "시작일", "종료일", "진행률", "Route", "SheetNo", "등록일", _
+                    "불량유형", "발생공정", "D+", _
+                    "검사결과", "검사횟수", "검사메모")
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 8 / 7
+
+    ws.rows(1).rowHeight = 6
+    ws.rows(2).rowHeight = 20
+    ws.rows(3).rowHeight = 11
+
+    For c = 0 To UBound(headers)
+        ws.Cells(PROD_HDR_ROW, PROD_COL_BATCH + c).Value = headers(c)
+        FormatHeaderCell ws.Cells(PROD_HDR_ROW, PROD_COL_BATCH + c)
+    Next c
+
+    DrawTitleShape ws, "PRODUCTION", "생산 데이터", CLR_ORANGE
+    Exit Sub
+ErrH:
+    MsgBox "SetupProductionSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupProcLogSheet(ws As Worksheet)
+    Dim headers As Variant
+    Dim c As Long
+    On Error GoTo ErrH
+
+    headers = Array("LogID", "S/N", "배치코드", "제품명", "구분", _
+                    "공정명", "공정순서", "설비", "상태", "시작일", _
+                    "종료예정일", "실제완료일", "계획일수", "실제일수", _
+                    "불량유형", "비고", "기록일시")
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 8 / 7
+
+    ws.rows(1).rowHeight = 6
+    ws.rows(2).rowHeight = 20
+    ws.rows(3).rowHeight = 11
+
+    For c = 0 To UBound(headers)
+        ws.Cells(PLOG_HDR_ROW, PLOG_COL_LOGID + c).Value = headers(c)
+        FormatHeaderCell ws.Cells(PLOG_HDR_ROW, PLOG_COL_LOGID + c)
+    Next c
+
+    DrawTitleShape ws, "PROCESS LOG", "공정 이력 로그", CLR_PURPLE
+    Exit Sub
+ErrH:
+    MsgBox "SetupProcLogSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupArchiveSheet(ws As Worksheet)
+    Dim headers As Variant
+    Dim c As Long
+    On Error GoTo ErrH
+
+    headers = Array("배치", "S/N", "구분", "제품명", "도면", "최종공정", _
+                    "최종설비", "상태", "최초시작일", "최종종료일", _
+                    "완료일", "Route", "진행률", "아카이브일")
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 8 / 7
+
+    ws.rows(1).rowHeight = 6
+    ws.rows(2).rowHeight = 20
+    ws.rows(3).rowHeight = 11
+
+    For c = 0 To UBound(headers)
+        ws.Cells(ARC_HDR_ROW, ARC_COL_BATCH + c).Value = headers(c)
+        FormatHeaderCell ws.Cells(ARC_HDR_ROW, ARC_COL_BATCH + c)
+    Next c
+
+    DrawTitleShape ws, "ARCHIVE", "완료/폐기 이력", CLR_TEXT_MID
+    Exit Sub
+ErrH:
+    MsgBox "SetupArchiveSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupCalendarSheet(ws As Worksheet)
+    Dim c As Long
+    Dim r As Long
+    On Error GoTo ErrH
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 1.5
+
+    For c = CAL_COL_START To CAL_COL_END
+        ws.Columns(c).ColumnWidth = 17
+    Next c
+
+    ws.Columns(10).ColumnWidth = 1.2
+    ws.Columns(11).ColumnWidth = 20
+    ws.Columns(12).ColumnWidth = 20
+    ws.Columns(13).ColumnWidth = 9
+    ws.Columns(14).ColumnWidth = 13
+
+    '★ 1~8행 높이 통일 (전부 명시)
+    ws.rows(1).rowHeight = 8          ' 여백
+    ws.rows(2).rowHeight = 38         ' CAL_ROW_TITLE
+    ws.rows(3).rowHeight = 20         ' CAL_ROW_KPI
+    ws.rows(4).rowHeight = 32         ' CAL_ROW_MEMO
+    ws.rows(5).rowHeight = 6          ' 간격
+    ws.rows(6).rowHeight = 34         ' CAL_ROW_MONTHTITLE
+    ws.rows(7).rowHeight = 22         ' CAL_ROW_DOW
+    ws.rows(8).rowHeight = 22         ' CAL_ROW_GRID_START (첫째 주 날짜행)
+
+    '★ 메모 영역
+    With ws.Cells(CAL_ROW_MEMO, CAL_COL_START)
+        .Value = ""
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Size = 9
+        .Font.Color = CLR_TEXT_DIM
+        .HorizontalAlignment = xlLeft
+        .VerticalAlignment = xlCenter
+        .Interior.Color = CLR_BG_DARK
+    End With
+
+    '★ 타이틀
+    ws.Cells(CAL_ROW_TITLE, CAL_COL_START).Value = ""
+    DrawTitleShape ws, "Production Calendar", _
+                   Format(Date, "YYYY") & " Schedule", CLR_CYAN
+
+    '★ 배경
+    ws.Cells.Interior.Color = CLR_BG_DARK
+    ws.Cells.Font.Name = TITLE_FONT_NAME
+
+    '★ 틀고정 해제
+    ws.Activate
+    On Error Resume Next
+    ActiveWindow.FreezePanes = False
+    On Error GoTo ErrH
+
+    Exit Sub
+ErrH:
+    MsgBox "SetupCalendarSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Public Sub SetupReportSheet(ws As Worksheet)
+    On Error GoTo ErrH
+
+    ws.Columns("A").ColumnWidth = SIDEBAR_WIDTH / 7
+    ws.Columns("B").ColumnWidth = 8 / 7
+    ws.Columns(3).ColumnWidth = 16
+    ws.Columns(4).ColumnWidth = 28
+    ws.Columns(5).ColumnWidth = 5
+    ws.Columns(6).ColumnWidth = 18
+    ws.Columns(7).ColumnWidth = 9
+    ws.Columns(8).ColumnWidth = 10
+    ws.Columns(9).ColumnWidth = 6
+    ws.Columns(10).ColumnWidth = 10
+    ws.Columns(11).ColumnWidth = 10
+
+    ws.rows(1).rowHeight = 6
+    ws.rows(2).rowHeight = 20
+    ws.rows(3).rowHeight = 11
+
+    DrawTitleShape ws, "REPORT", "생산 리포트 / KPI", CLR_YELLOW
+    Exit Sub
+ErrH:
+    MsgBox "SetupReportSheet 오류: " & Err.Description, vbExclamation
+End Sub
+
+'================================================================
+' 사이드바: v11 스타일 ? 채우기 최소, 선으로 구분
+'================================================================
+Public Sub DrawSidebarFull(ws As Worksheet)
+    Dim shp     As Shape
+    Dim items() As String
+    Dim i       As Long
+    Dim topPos  As Single
+    Dim itemH   As Single
+    Dim itemW   As Single
+    Dim bgW     As Single
+    Dim totalH  As Single
+    Dim ri      As Long
+    On Error GoTo ErrH
+
+    ' ── 기존 사이드바 도형 삭제 ──
+    For i = ws.Shapes.count To 1 Step -1
+        Set shp = ws.Shapes(i)
+        If Left(shp.Name, 3) = "SB_" Or Left(shp.Name, 4) = "SBR_" Then shp.Delete
+    Next i
+
+    ' ── 사이드바 크기 계산 ──
+    bgW = ws.Columns(1).Width
+    totalH = 0
+    For ri = 1 To 60
+        totalH = totalH + ws.rows(ri).Height
+    Next ri
+    If totalH < 800 Then totalH = 800
+
+    ' ??????????????????????????????????????
+    '  배경 + 우측 테두리
+    ' ??????????????????????????????????????
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 0, 0, bgW, totalH)
+    With shp
+        .Name = "SB_BG"
+        .Fill.ForeColor.RGB = CLR_SIDEBAR
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+    End With
+
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, bgW - 1, 0, 1, totalH)
+    With shp
+        .Name = "SB_BORDER"
+        .Fill.ForeColor.RGB = CLR_BG_LIGHT
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+    End With
+
+    ' ??????????????????????????????????????
+    '  로고
+    ' ??????????????????????????????????????
+    Dim logoTop As Single: logoTop = 12
+    Dim logoH As Single: logoH = 32
+
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 8, logoTop, bgW - 16, logoH)
+    With shp
+        .Name = "SB_LOGO"
+        .Fill.Visible = msoFalse
+        .line.Visible = msoFalse
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            .MarginLeft = 4
+            With .TextRange
+                .text = "ESC Manager"
+                .Font.Size = 11
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = CLR_TEXT_WHITE
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+    End With
+
+    ' ── 로고 아래 구분선 ──
+    Dim divTop1 As Single: divTop1 = logoTop + logoH + 4   ' 48
+
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 10, divTop1, bgW - 20, 1)
+    With shp
+        .Name = "SB_DIVIDER"
+        .Fill.ForeColor.RGB = CLR_BG_LIGHT
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+    End With
+
+    ' ??????????????????????????????????????
+    '  네비게이션 메뉴
+    ' ??????????????????????????????????????
+    items = Split(SIDEBAR_ITEMS, ",")
+    itemH = 28
+    itemW = bgW - 12
+    topPos = divTop1 + 8    ' 56
+
+    Dim activeItem As String: activeItem = ""
+    Select Case ws.Name
+        Case SHT_WORKSPACE: activeItem = "Work Space"
+        Case SHT_CALENDAR:  activeItem = "Calendar"
+        Case SHT_PRODUCT:   activeItem = "Product"
+        Case SHT_REPORT:    activeItem = "Report"
+        Case SHT_ARCHIVE:   activeItem = "Archive"
+    End Select
+
+    For i = 0 To UBound(items)
+        Dim isActive As Boolean
+        isActive = (Trim(items(i)) = activeItem)
+
+        If isActive Then
+            Set shp = ws.Shapes.AddShape(msoShapeRectangle, _
+                          2, topPos + i * (itemH + 3), 3, itemH)
+            With shp
+                .Name = "SB_ACT_" & i
+                .Fill.ForeColor.RGB = CLR_CYAN
+                .line.Visible = msoFalse
+                .Placement = xlFreeFloating
+            End With
+        End If
+
+        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                      6, topPos + i * (itemH + 3), itemW, itemH)
+        With shp
+            .Name = "SB_M" & i
+            .Fill.Visible = msoFalse
+            .line.Visible = msoFalse
+            With .TextFrame2
+                .VerticalAnchor = msoAnchorMiddle
+                .MarginLeft = 12
+                .WordWrap = msoFalse
+                With .TextRange
+                    .text = Trim(items(i))
+                    .Font.Size = 9
+                    .Font.Bold = msoTrue
+                    .Font.Name = TITLE_FONT_NAME
+                    .ParagraphFormat.Alignment = msoAlignLeft
+                    If isActive Then
+                        .Font.Fill.ForeColor.RGB = CLR_CYAN
+                    Else
+                        .Font.Fill.ForeColor.RGB = CLR_TEXT_MID
+                    End If
+                End With
+            End With
+            .Placement = xlFreeFloating
+        End With
+        shp.OnAction = "SidebarClick_" & i
+    Next i
+
+    ' ??????????????????????????????????????
+    '  메뉴 아래 구분선
+    ' ??????????????????????????????????????
+    Dim menuBottom As Single
+    menuBottom = topPos + (UBound(items) + 1) * (itemH + 3) + 6
+
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 10, menuBottom, bgW - 20, 1)
+    With shp
+        .Name = "SB_DIVIDER_MID"
+        .Fill.ForeColor.RGB = CLR_BG_LIGHT
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+    End With
+
+    ' ??????????????????????????????????????
+    '  새로고침 버튼
+    ' ??????????????????????????????????????
+    Dim refreshTop As Single: refreshTop = menuBottom + 10
+    Dim refreshH As Single: refreshH = 26
+
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  8, refreshTop, bgW - 16, refreshH)
+    With shp
+        .Name = "SB_REFRESH"
+        .Fill.Visible = msoFalse
+        .line.ForeColor.RGB = CLR_CYAN
+        .line.Weight = 0.75
+        .line.Visible = msoTrue
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = "새로고침"
+                .Font.Size = 8
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = CLR_CYAN
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+        .OnAction = "RefreshCurrentSheet"
+    End With
+
+    ' ??????????????????????????????????????
+    '  클라우드 동기화 영역
+    ' ??????????????????????????????????????
+       ' ??????????????????????????????????????
+    '  클라우드 동기화 영역
+    ' ??????????????????????????????????????
+    Dim fbDivTop As Single: fbDivTop = refreshTop + refreshH + 12
+
+    ' 구분선
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 10, fbDivTop, bgW - 20, 1)
+    With shp
+        .Name = "SB_DIVIDER_FB"
+        .Fill.ForeColor.RGB = CLR_BG_LIGHT
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+    End With
+
+    ' 라벨
+    Dim fbLabelTop As Single: fbLabelTop = fbDivTop + 5
+    Dim fbLabelH As Single: fbLabelH = 14
+
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 6, fbLabelTop, bgW - 12, fbLabelH)
+    With shp
+        .Name = "SB_FB_LABEL"
+        .Fill.Visible = msoFalse
+        .line.Visible = msoFalse
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = "클라우드 동기화"
+                .Font.Size = 7
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = CLR_TEXT_DIM
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+    End With
+
+    ' ★ 세로 배치: 올리기 → 받기
+    Dim fbBtnH As Single: fbBtnH = 24
+    Dim fbBtnW As Single: fbBtnW = bgW - 16
+    Dim fbBtn1Top As Single: fbBtn1Top = fbLabelTop + fbLabelH + 4
+
+    ' ▲ 올리기
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  8, fbBtn1Top, fbBtnW, fbBtnH)
+    With shp
+        .Name = "SB_FB_PUSH"
+        .Fill.Visible = msoFalse
+        .line.ForeColor.RGB = CLR_GREEN
+        .line.Weight = 0.75
+        .line.Visible = msoTrue
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = ChrW(&H25B2) & " 올리기"
+                .Font.Size = 8
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = CLR_GREEN
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+        .OnAction = "FirebasePushWithSync"
+    End With
+
+    ' ▼ 받기
+    Dim fbBtn2Top As Single: fbBtn2Top = fbBtn1Top + fbBtnH + 4
+
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  8, fbBtn2Top, fbBtnW, fbBtnH)
+    With shp
+        .Name = "SB_FB_PULL"
+        .Fill.Visible = msoFalse
+        .line.ForeColor.RGB = CLR_BLUE
+        .line.Weight = 0.75
+        .line.Visible = msoTrue
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = ChrW(&H25BC) & " 받기"
+                .Font.Size = 8
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = CLR_BLUE
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+        .OnAction = "FirebasePullWithSync"
+    End With
+
+    ' ??????????????????????????????????????
+    '  하단 고정 영역 (초기화 + 버전)
+    '  바닥에서 100pt 위부터 시작
+    ' ??????????????????????????????????????
+    Dim btnAreaTop As Single
+    btnAreaTop = totalH - 100
+
+    ' 구분선
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 10, btnAreaTop, bgW - 20, 1)
+    With shp
+        .Name = "SB_DIVIDER2"
+        .Fill.ForeColor.RGB = CLR_BG_LIGHT
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+    End With
+
+    ' 시스템 초기화
+    Dim initTop As Single: initTop = btnAreaTop + 10
+    Dim initH As Single: initH = 24
+
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  8, initTop, bgW - 16, initH)
+    With shp
+        .Name = "SB_INIT"
+        .Fill.Visible = msoFalse
+        .line.ForeColor.RGB = RGB(180, 130, 60)
+        .line.Weight = 0.75
+        .line.Visible = msoTrue
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = "초기화"
+                .Font.Size = 8
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = RGB(180, 130, 60)
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+        .OnAction = "InitializeSystem"
+    End With
+
+    ' 데이터 초기화
+    Dim resetTop As Single: resetTop = initTop + initH + 6
+    Dim resetH As Single: resetH = 24
+
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  8, resetTop, bgW - 16, resetH)
+    With shp
+        .Name = "SB_RESET"
+        .Fill.Visible = msoFalse
+        .line.ForeColor.RGB = RGB(200, 80, 80)
+        .line.Weight = 0.75
+        .line.Visible = msoTrue
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = "데이터 초기화"
+                .Font.Size = 8
+                .Font.Bold = msoTrue
+                .Font.Fill.ForeColor.RGB = RGB(200, 80, 80)
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+        .OnAction = "ResetAllData"
+    End With
+
+    ' 버전 표시
+    Set shp = ws.Shapes.AddShape(msoShapeRectangle, 6, totalH - 36, itemW, 20)
+    With shp
+        .Name = "SB_VER"
+        .Fill.Visible = msoFalse
+        .line.Visible = msoFalse
+        With .TextFrame2
+            .VerticalAnchor = msoAnchorMiddle
+            With .TextRange
+                .text = "v12.4"
+                .Font.Size = 8
+                .Font.Fill.ForeColor.RGB = CLR_TEXT_HINT
+                .Font.Name = TITLE_FONT_NAME
+                .ParagraphFormat.Alignment = msoAlignCenter
+            End With
+        End With
+        .Placement = xlFreeFloating
+    End With
+
+    Exit Sub
+ErrH:
+End Sub
+
+' 사이드바 네비게이션
+Public Sub SidebarClick_0(): ThisWorkbook.sheets(SHT_WORKSPACE).Activate: End Sub
+Public Sub SidebarClick_1(): ThisWorkbook.sheets(SHT_CALENDAR).Activate: End Sub
+Public Sub SidebarClick_2(): ThisWorkbook.sheets(SHT_PRODUCT).Activate: End Sub
+Public Sub SidebarClick_3(): ThisWorkbook.sheets(SHT_REPORT).Activate: End Sub
+Public Sub SidebarClick_4(): ThisWorkbook.sheets(SHT_ARCHIVE).Activate: End Sub
+Public Sub BuildWorkSpaceButtons(ws As Worksheet)
+    Dim shp      As Shape
+    Dim topPos   As Double
+    Dim leftPos  As Double
+    Dim btnW     As Double
+    Dim btnH     As Double
+    Dim gap      As Double
+    Dim i        As Long
+    Dim names()  As String
+    Dim macros() As String
+    On Error GoTo ErrH
+
+    For Each shp In ws.Shapes
+        If Left(shp.Name, 4) = "BTN_" Then shp.Delete
+    Next shp
+
+    topPos = ws.rows(1).Height + ws.rows(WS_ROW_TITLE).Height + _
+             ws.rows(WS_ROW_SUBTITLE).Height + 4
+    leftPos = ws.Columns("A").Width + ws.Columns("B").Width + 4
+    btnW = 76
+    btnH = 22
+    gap = 5
+
+    '── 5개 버튼 (새로고침/초기화 제거) ──
+    names = Split("제품등록,S/N생성,편집,NG,접기/펼치기", ",")
+    macros = Split("ShowProductForm,ShowSerialGenForm,EnterEditMode,ShowNGForm,ToggleWSView", ",")
+    
+    For i = 0 To UBound(names)
+        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                      leftPos + i * (btnW + gap), topPos, btnW, btnH)
+        With shp
+            .Name = "BTN_" & names(i)
+            .TextFrame2.TextRange.text = names(i)
+            .TextFrame2.TextRange.Font.Size = 9
+            .TextFrame2.TextRange.Font.Name = TITLE_FONT_NAME
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.MarginLeft = 2
+            .TextFrame2.MarginRight = 2
+            .Placement = xlFreeFloating
+
+            Select Case i
+                Case 2  ' 편집
+                    .Fill.Visible = msoFalse
+                    .line.ForeColor.RGB = CLR_CYAN
+                    .line.Weight = 1: .line.Visible = msoTrue
+                    .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_CYAN
+                    .TextFrame2.TextRange.Font.Bold = msoTrue
+                Case 3  ' NG
+                    .Fill.ForeColor.RGB = CLR_BG_MID
+                    .line.ForeColor.RGB = RGB(255, 80, 80)
+                    .line.Weight = 1: .line.Visible = msoTrue
+                    .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 80, 80)
+                Case 4  ' 접기/펼치기
+                    .Fill.Visible = msoFalse
+                    .line.ForeColor.RGB = CLR_ORANGE
+                    .line.Weight = 1: .line.Visible = msoTrue
+                    .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_ORANGE
+                    .TextFrame2.TextRange.Font.Bold = msoTrue
+                Case Else
+                    .Fill.Visible = msoFalse
+                    .line.ForeColor.RGB = CLR_BG_LIGHT
+                    .line.Weight = 0.75: .line.Visible = msoTrue
+                    .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_TEXT_LIGHT
+            End Select
+        End With
+        shp.OnAction = macros(i)
+    Next i
+
+    '── Gantt 네비게이션 ──
+    leftPos = ws.Columns("A").Width + ws.Columns("B").Width + 580
+    btnW = 40
+    Dim gNames()  As String
+    Dim gMacros() As String
+    gNames = Split(ChrW(&H25C4) & ",오늘," & ChrW(&H25BA), ",")
+    gMacros = Split("GanttPrev,GanttToday,GanttNext", ",")
+
+    For i = 0 To UBound(gNames)
+        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                      leftPos + i * (btnW + 4), topPos, btnW, btnH)
+        With shp
+            .Name = "BTN_GNT_" & i
+            .TextFrame2.TextRange.text = gNames(i)
+            .TextFrame2.TextRange.Font.Size = 9
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_CYAN
+            .TextFrame2.TextRange.Font.Name = TITLE_FONT_NAME
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .Fill.Visible = msoFalse
+            .line.ForeColor.RGB = CLR_CYAN
+            .line.Weight = 0.75: .line.Visible = msoTrue
+            .Placement = xlFreeFloating
+        End With
+        shp.OnAction = gMacros(i)
+    Next i
+    Exit Sub
+ErrH:
+    MsgBox "BuildWorkSpaceButtons 오류: " & Err.Description, vbExclamation
+End Sub
+
+'================================================================
+' Report 버튼
+'================================================================
+Public Sub SetupReportButtons(ws As Worksheet)
+    Dim shp As Shape
+    Dim hasRefresh As Boolean, hasPDF As Boolean, hasPrint As Boolean
+    
+    For Each shp In ws.Shapes
+        Select Case shp.Name
+            Case "BTN_RPT_REFRESH": hasRefresh = True
+            Case "BTN_RPT_PDF":     hasPDF = True
+            Case "BTN_RPT_PRINT":   hasPrint = True
+        End Select
+    Next shp
+    
+    Dim btnTop As Single
+    btnTop = ws.Cells(3, 11).Top          ' ← K열 3행
+    Dim btnLeft As Single
+    btnLeft = ws.Cells(3, 11).Left        ' ← K열 시작
+    Dim btnW As Single: btnW = 90
+    Dim btnH As Single: btnH = 28
+    Dim gap As Single: gap = 6
+    
+    If Not hasRefresh Then
+        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+            btnLeft, btnTop, btnW, btnH)
+        With shp
+            .Name = "BTN_RPT_REFRESH"
+            .Fill.ForeColor.RGB = RGB(0, 120, 200)
+            .line.Visible = msoFalse
+            .TextFrame2.TextRange.text = "새로고침"
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Name = TITLE_FONT_NAME
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .Placement = xlFreeFloating
+            .OnAction = "GenerateDailyReport"
+        End With
+    End If
+    
+    If Not hasPDF Then
+        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+            btnLeft + btnW + gap, btnTop, btnW, btnH)
+        With shp
+            .Name = "BTN_RPT_PDF"
+            .Fill.ForeColor.RGB = RGB(200, 50, 50)
+            .line.Visible = msoFalse
+            .TextFrame2.TextRange.text = "PDF 저장"
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Name = TITLE_FONT_NAME
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .Placement = xlFreeFloating
+            .OnAction = "ExportReportPDF"
+        End With
+    End If
+    
+    If Not hasPrint Then
+        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+            btnLeft + (btnW + gap) * 2, btnTop, btnW, btnH)
+        With shp
+            .Name = "BTN_RPT_PRINT"
+            .Fill.ForeColor.RGB = RGB(80, 90, 100)
+            .line.Visible = msoFalse
+            .TextFrame2.TextRange.text = "인쇄"
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Name = TITLE_FONT_NAME
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .Placement = xlFreeFloating
+            .OnAction = "PrintReport"
+        End With
+    End If
+End Sub
+
+'================================================================
+' EnsureTitleShape: 시트 전환 시 도형 자동 복구
+'================================================================
+Public Sub EnsureTitleShape(ws As Worksheet)
+    Dim hasTitle As Boolean
+    Dim shp As Shape
+    On Error Resume Next
+    hasTitle = False
+    For Each shp In ws.Shapes
+        If Left(shp.Name, Len(TITLE_SHAPE_PREFIX)) = TITLE_SHAPE_PREFIX Then
+            hasTitle = True: Exit For
+        End If
+    Next shp
+    On Error GoTo 0
+
+    If Not hasTitle Then
+        Select Case ws.Name
+            Case SHT_WORKSPACE
+                DrawTitleShape ws, "ESC Production Management", _
+                               "Ceramic Electrostatic Chuck Production System v12.1", CLR_CYAN
+            Case SHT_CALENDAR
+                DrawTitleShape ws, "Production Calendar", _
+                               Format(Date, "YYYY") & " Schedule", CLR_CYAN
+            Case SHT_PRODUCT
+                DrawTitleShape ws, "PRODUCT MASTER", "제품 마스터 관리", CLR_GREEN
+            Case SHT_PRODUCTION
+                DrawTitleShape ws, "PRODUCTION", "생산 데이터", CLR_ORANGE
+            Case SHT_PROCLOG
+                DrawTitleShape ws, "PROCESS LOG", "공정 이력", CLR_PURPLE
+            Case SHT_REPORT
+                DrawTitleShape ws, "REPORT", "KPI", CLR_YELLOW
+            Case SHT_ARCHIVE
+                DrawTitleShape ws, "ARCHIVE", "완료/폐기 이력", CLR_TEXT_MID
+        End Select
+    End If
+End Sub
+
+'================================================================
+' InitializeSystem
+'================================================================
+Public Sub InitializeSystem()
+    Dim wsWS   As Worksheet
+    Dim wsCal  As Worksheet
+    Dim wsPrd  As Worksheet
+    Dim wsProd As Worksheet
+    Dim wsPlog As Worksheet
+    Dim wsRpt  As Worksheet
+    Dim wsArc  As Worksheet
+    Dim ws     As Worksheet
+    Dim validNames As Object
+    On Error GoTo ErrH
+
+    g_CurrentMode = MODE_NONE
+    g_CurrentView = VIEW_BATCH
+    g_GanttBaseDate = Date
+    g_EventsDisabled = False
+    Set g_ExpandedKeys = CreateObject("Scripting.Dictionary")
+    g_CalendarMonth = DateSerial(Year(Date), Month(Date), 1)
+
+    Application.ScreenUpdating = False
+
+    Set wsWS = EnsureSheet(SHT_WORKSPACE)
+    Set wsCal = EnsureSheet(SHT_CALENDAR)
+    Set wsPrd = EnsureSheet(SHT_PRODUCT)
+    Set wsProd = EnsureSheet(SHT_PRODUCTION)
+    Set wsPlog = EnsureSheet(SHT_PROCLOG)
+    Set wsRpt = EnsureSheet(SHT_REPORT)
+    Set wsArc = EnsureSheet(SHT_ARCHIVE)
+
+    ' 다크 테마 + UI
+    ApplySheetUI wsWS
+    ApplySheetUI wsCal
+    ApplySheetUI wsPrd
+    ApplySheetUI wsProd
+    ApplySheetUI wsPlog
+    ApplySheetUI wsRpt
+    ApplySheetUI wsArc
+
+    ' 시트별 Setup
+    SetupWorkSpaceSheet wsWS
+    SetupCalendarSheet wsCal
+    SetupProductSheet wsPrd
+    SetupProductionSheet wsProd
+    SetupProcLogSheet wsPlog
+    SetupReportSheet wsRpt
+    SetupArchiveSheet wsArc
+
+    ' 불필요 시트 삭제
+    Set validNames = CreateObject("Scripting.Dictionary")
+    validNames(SHT_WORKSPACE) = 1
+    validNames(SHT_CALENDAR) = 1
+    validNames(SHT_PRODUCT) = 1
+    validNames(SHT_PRODUCTION) = 1
+    validNames(SHT_PROCLOG) = 1
+    validNames(SHT_REPORT) = 1
+    validNames(SHT_ARCHIVE) = 1
+
+    Application.DisplayAlerts = False
+    For Each ws In ThisWorkbook.Worksheets
+        If Not validNames.Exists(ws.Name) Then
+            If ThisWorkbook.Worksheets.count > 1 Then ws.Delete
+        End If
+    Next ws
+    Application.DisplayAlerts = True
+
+      ' 숨김 시트 (나중에 활성화)
+    ' On Error Resume Next
+    ' ThisWorkbook.Sheets(SHT_PRODUCTION).Visible = xlSheetVeryHidden
+    ' ThisWorkbook.Sheets(SHT_PROCLOG).Visible = xlSheetVeryHidden
+    ' On Error GoTo 0
+   ' 사이드바 + 버튼
+     
+     ThisWorkbook.sheets(SHT_PRODUCTION).Visible = xlSheetVisible
+    ThisWorkbook.sheets(SHT_PROCLOG).Visible = xlSheetVisible
+    
+    DrawSidebarFull wsWS
+    BuildWorkSpaceButtons wsWS
+    SetupReportButtons wsRpt
+    
+    wsWS.Activate
+    Application.ScreenUpdating = True
+    MsgBox "ESC Production Management System v12.1 초기화 완료.", vbInformation
+    Exit Sub
+ErrH:
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    MsgBox "InitializeSystem 오류: " & Err.Description, vbCritical
+End Sub
+' ────────────────────────────────────────────
+'  CalcEndDate: 종료일 = 시작일 + 작업일수 (시작일 미포함)
+' ────────────────────────────────────────────
+Public Function CalcEndDate(startDate As Date, procDays As Long) As Date
+    If procDays <= 0 Then CalcEndDate = startDate Else CalcEndDate = startDate + procDays
+End Function
+' ────────────────────────────────────────────
+'  CalcNextStart: 다음 공정 시작 = 종료일+1, 주말→월요일
+' ────────────────────────────────────────────
+Public Function CalcNextStart(endDate As Date) As Date
+    CalcNextStart = AdjustToWeekday(endDate + 1)
+End Function
+
+' ────────────────────────────────────────────
+'  하위 호환 래퍼
+' ────────────────────────────────────────────
+Public Function CalcEndDateBiz(startDate As Date, procDays As Long) As Date
+    CalcEndDateBiz = CalcEndDate(startDate, procDays)
+End Function
+
+Public Function NextBizDay(dt As Date) As Date
+    NextBizDay = AdjustToWeekday(dt)
+End Function
+Public Sub CalcFullSchedule(sn As String)
+    On Error GoTo ErrH
+    Dim wsPlog As Worksheet: Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+    Dim wsProd As Worksheet: Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    
+    ' ── 1) SN의 ProcLog 행 수집 (캐시 우선) ──
+    Dim logRows() As Long, cnt As Long: cnt = 0
+    ReDim logRows(1 To 30)
+    
+    If IsCacheReady() Then
+        Dim cachedRows As Collection
+        Set cachedRows = GetCachedSNRows(sn)
+        
+        If cachedRows.count = 0 Then Exit Sub
+        
+        Dim ci As Long
+        For ci = 1 To cachedRows.count
+            cnt = cnt + 1
+            If cnt > UBound(logRows) Then ReDim Preserve logRows(1 To cnt + 10)
+            logRows(cnt) = cachedRows(ci) + PLOG_DATA_START - 1
+        Next ci
+    Else
+        Dim lastR As Long: lastR = GetLastRow(wsPlog, PLOG_COL_LOGID)
+        If lastR < PLOG_DATA_START Then Exit Sub
+        
+        Dim r As Long
+        For r = PLOG_DATA_START To lastR
+            If SafeStr(wsPlog.Cells(r, PLOG_COL_SN).Value) = sn Then
+                cnt = cnt + 1
+                If cnt > UBound(logRows) Then ReDim Preserve logRows(1 To cnt + 10)
+                logRows(cnt) = r
+            End If
+        Next r
+    End If
+    
+    If cnt = 0 Then Exit Sub
+
+    ' ── 2) 완료/진행 공정의 마지막 종료일 ──
+    Dim hasLastEnd As Boolean: hasLastEnd = False
+    Dim lastKnownEnd As Date
+    Dim i As Long, st As String
+
+    For i = 1 To cnt
+        r = logRows(i)
+        st = SafeStr(wsPlog.Cells(r, PLOG_COL_STATUS).Value)
+
+        If st = ST_DONE Then
+            If SafeIsDate(wsPlog.Cells(r, PLOG_COL_ACTEND).Value) Then
+                lastKnownEnd = CDate(wsPlog.Cells(r, PLOG_COL_ACTEND).Value)
+                hasLastEnd = True
+            ElseIf SafeIsDate(wsPlog.Cells(r, PLOG_COL_PLANEND).Value) Then
+                lastKnownEnd = CDate(wsPlog.Cells(r, PLOG_COL_PLANEND).Value)
+                hasLastEnd = True
+            End If
+        End If
+
+        If st = ST_PROG Then
+            If SafeIsDate(wsPlog.Cells(r, PLOG_COL_PLANEND).Value) Then
+                lastKnownEnd = CDate(wsPlog.Cells(r, PLOG_COL_PLANEND).Value)
+                hasLastEnd = True
+            Else
+                Dim progStart As String: progStart = SafeStr(wsPlog.Cells(r, PLOG_COL_SDATE).Value)
+                Dim progDays As Long: progDays = SafeLng(wsPlog.Cells(r, PLOG_COL_PLANDAYS).Value)
+                If progDays <= 0 Then progDays = 1
+                If SafeIsDate(progStart) Then
+                    lastKnownEnd = CDate(progStart) + progDays
+                    hasLastEnd = True
+                    wsPlog.Cells(r, PLOG_COL_PLANEND).Value = FmtDate(lastKnownEnd)
+                End If
+            End If
+        End If
+    Next i
+
+    ' ── 3) 기준 시작일 ──
+    Dim curStart As Date, curEnd As Date
+    If hasLastEnd Then
+        curStart = AdjustToWeekday(lastKnownEnd)
+    Else
+        curStart = AdjustToWeekday(Date)
+    End If
+
+    ' ── 4) 미확정 공정 재계산 ──
+    Dim calculated As Long: calculated = 0
+    Dim planDays As Long
+
+    For i = 1 To cnt
+        r = logRows(i)
+        st = SafeStr(wsPlog.Cells(r, PLOG_COL_STATUS).Value)
+
+        If st = ST_DONE Or st = ST_PROG Then
+            If SafeIsDate(wsPlog.Cells(r, PLOG_COL_PLANEND).Value) Then
+                curStart = AdjustToWeekday(CDate(wsPlog.Cells(r, PLOG_COL_PLANEND).Value))
+            End If
+            GoTo NextCalcProc2
+        End If
+
+        planDays = SafeLng(wsPlog.Cells(r, PLOG_COL_PLANDAYS).Value)
+        If planDays <= 0 Then planDays = 1
+
+        curStart = AdjustToWeekday(curStart)
+        curEnd = curStart + planDays
+
+        wsPlog.Cells(r, PLOG_COL_SDATE).Value = FmtDate(curStart)
+        wsPlog.Cells(r, PLOG_COL_PLANEND).Value = FmtDate(curEnd)
+        wsPlog.Cells(r, PLOG_COL_LOGTIME).Value = Now()
+
+        calculated = calculated + 1
+        curStart = AdjustToWeekday(curEnd)
+
+NextCalcProc2:
+    Next i
+
+    ' ── 5) Production 시트 업데이트 ──
+    Dim prodLR As Long: prodLR = GetLastRow(wsProd, PROD_COL_SN)
+    Dim pr As Long
+    For pr = PROD_DATA_START To prodLR
+        If SafeStr(wsProd.Cells(pr, PROD_COL_SN).Value) = sn Then
+            Dim curProc As String: curProc = SafeStr(wsProd.Cells(pr, PROD_COL_PROCESS).Value)
+            Dim j As Long
+            For j = 1 To cnt
+                If SafeStr(wsPlog.Cells(logRows(j), PLOG_COL_PROC).Value) = curProc Then
+                    If SafeIsDate(wsPlog.Cells(logRows(j), PLOG_COL_SDATE).Value) Then
+                        wsProd.Cells(pr, PROD_COL_START).Value = SafeStr(wsPlog.Cells(logRows(j), PLOG_COL_SDATE).Value)
+                    End If
+                    If SafeIsDate(wsPlog.Cells(logRows(j), PLOG_COL_PLANEND).Value) Then
+                        wsProd.Cells(pr, PROD_COL_END).Value = SafeStr(wsPlog.Cells(logRows(j), PLOG_COL_PLANEND).Value)
+                    End If
+                    Exit For
+                End If
+            Next j
+            Exit For
+        End If
+    Next pr
+
+    ' ── 6) 캐시 무효화 (ProcLog에 쓰기 했으므로) ──
+    If calculated > 0 Then InvalidateCache
+
+    Debug.Print "CalcFullSchedule [" & sn & "] 완료: " & calculated & "개 공정 일정 계산됨"
+    Exit Sub
+ErrH:
+    Debug.Print "CalcFullSchedule 오류: " & Err.Description
+End Sub
+Public Function GetProcLogDates(sn As String, procName As String) As Variant
+    ' ★ 캐시가 있으면 캐시에서, 없으면 기존 방식으로
+    If IsCacheReady() Then
+        GetProcLogDates = GetCachedProcDates(sn, procName)
+        Exit Function
+    End If
+    
+    ' ── 기존 방식 (캐시 없을 때 fallback) ──
+    Dim wsPlog As Worksheet
+    Dim lastR  As Long
+    Dim r      As Long
+    On Error GoTo ErrH
+
+    Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+    lastR = GetLastRow(wsPlog, PLOG_COL_LOGID)
+
+    If lastR >= PLOG_DATA_START Then
+        For r = PLOG_DATA_START To lastR
+            If SafeStr(wsPlog.Cells(r, PLOG_COL_SN).Value) = sn And _
+               SafeStr(wsPlog.Cells(r, PLOG_COL_PROC).Value) = procName Then
+                GetProcLogDates = Array( _
+                    SafeStr(wsPlog.Cells(r, PLOG_COL_SDATE).Value), _
+                    SafeStr(wsPlog.Cells(r, PLOG_COL_PLANEND).Value))
+                Exit Function
+            End If
+        Next r
+    End If
+
+    GetProcLogDates = Array("", "")
+    Exit Function
+ErrH:
+    GetProcLogDates = Array("", "")
+End Function
+
+
+

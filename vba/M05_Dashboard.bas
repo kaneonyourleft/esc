@@ -1,0 +1,1191 @@
+Attribute VB_Name = "M05_Dashboard"
+Option Explicit
+
+' ============================================================
+'  M05_Calendar ? 월간 캘린더, KPI, 날짜 클릭
+' ============================================================
+Public Sub RefreshCalendar()
+    Dim ws As Worksheet
+    On Error GoTo ErrH
+
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    Application.ScreenUpdating = False
+
+    If g_CalendarMonth = 0 Then
+        g_CalendarMonth = DateSerial(Year(Date), Month(Date), 1)
+    End If
+
+    BuildCalendarGrid ws
+    WriteKPILine ws
+    FillCalendarItems ws
+    BuildIssueBoard ws
+
+    Application.ScreenUpdating = True
+    Exit Sub
+ErrH:
+    Application.ScreenUpdating = True
+    MsgBox "RefreshCalendar 오류: " & Err.Description, vbCritical
+End Sub
+' ============================================================
+'  KPI ? 3행에 한 줄로 표시
+' ============================================================
+Private Sub WriteKPILine(ws As Worksheet)
+    Dim wsProd   As Worksheet
+    Dim wsArc    As Worksheet
+    Dim lastR    As Long
+    Dim r        As Long
+    Dim st       As String
+    Dim total    As Long
+    Dim progCnt  As Long
+    Dim waitCnt  As Long
+    Dim doneCnt  As Long
+    Dim delayCnt As Long
+    Dim scrapCnt As Long
+    Dim goodPct  As Double
+    On Error GoTo ErrH
+
+    Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Set wsArc = ThisWorkbook.sheets(SHT_ARCHIVE)
+
+    ws.Range(ws.Cells(CAL_ROW_KPI, CAL_COL_START), _
+             ws.Cells(CAL_ROW_KPI, CAL_COL_END + 6)).ClearContents
+
+    lastR = GetLastRow(wsProd, PROD_COL_SN)
+    If lastR >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastR
+            st = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            If st = "" Then GoTo nextKPI_P
+            total = total + 1
+            Select Case st
+                Case ST_PROG:  progCnt = progCnt + 1
+                Case ST_WAIT:  waitCnt = waitCnt + 1
+                Case ST_DELAY: delayCnt = delayCnt + 1
+                Case ST_SCRAP: scrapCnt = scrapCnt + 1
+            End Select
+nextKPI_P:
+        Next r
+    End If
+
+    lastR = GetLastRow(wsArc, ARC_COL_SN)
+    If lastR >= ARC_DATA_START Then
+        For r = ARC_DATA_START To lastR
+            st = SafeStr(wsArc.Cells(r, ARC_COL_STATUS).Value)
+            If st = ST_DONE Then
+                total = total + 1: doneCnt = doneCnt + 1
+            ElseIf st = ST_SCRAP Then
+                total = total + 1: scrapCnt = scrapCnt + 1
+            End If
+        Next r
+    End If
+
+    If total > 0 Then goodPct = (total - scrapCnt) / total * 100
+
+    Dim kpiText As String
+    kpiText = "전체 " & total & _
+              "  |  진행 " & progCnt & _
+              "  |  대기 " & waitCnt & _
+              "  |  완료 " & doneCnt & _
+              "  |  지연 " & delayCnt & _
+              "  |  불량 " & scrapCnt & _
+              "  |  양품률 " & Format(goodPct, "0.0") & "%"
+
+    With ws.Cells(CAL_ROW_KPI, CAL_COL_START)
+        .Value = kpiText
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Size = 9
+        .Font.Color = CLR_TEXT_DIM
+    End With
+
+    Exit Sub
+ErrH:
+    MsgBox "WriteKPILine 오류: " & Err.Description, vbExclamation
+End Sub
+
+' ============================================================
+'  캘린더 그리드
+' ============================================================
+Private Sub BuildCalendarGrid(ws As Worksheet)
+    Dim firstDay       As Date
+    Dim startCell      As Long
+    Dim w              As Long
+    Dim d              As Long
+    Dim r              As Long
+    Dim c              As Long
+    Dim dt             As Date
+    Dim dayNum         As Long
+    Dim gridEndRow     As Long
+    Dim lastDayOfMonth As Long
+    Dim ir             As Long
+    On Error GoTo ErrH
+
+    gridEndRow = CAL_ROW_GRID_START + CAL_WEEKS * CAL_ROWS_PER_WEEK
+
+    ' ── 전체 초기화 ──
+    Dim fullRng As Range
+    Set fullRng = ws.Range(ws.Cells(CAL_ROW_DOW, CAL_COL_START), _
+                           ws.Cells(gridEndRow, CAL_COL_END))
+    fullRng.ClearContents
+    fullRng.ClearComments
+    fullRng.Interior.Color = CLR_BG_DARK
+    fullRng.Borders.lineStyle = xlNone
+    fullRng.Font.Name = TITLE_FONT_NAME
+
+    ' 상세패널 초기화
+    On Error Resume Next
+    ws.Range(ws.Cells(CAL_DETAIL_ROW_START, CAL_DETAIL_COL), _
+             ws.Cells(gridEndRow + 10, CAL_DETAIL_COL + CAL_DETAIL_WIDTH - 1)).UnMerge
+    On Error GoTo ErrH
+    ws.Range(ws.Cells(CAL_DETAIL_ROW_START, CAL_DETAIL_COL), _
+             ws.Cells(gridEndRow + 10, CAL_DETAIL_COL + CAL_DETAIL_WIDTH - 1)).ClearContents
+    ws.Range(ws.Cells(CAL_DETAIL_ROW_START, CAL_DETAIL_COL), _
+             ws.Cells(gridEndRow + 10, CAL_DETAIL_COL + CAL_DETAIL_WIDTH - 1)).Interior.Color = CLR_BG_DARK
+    ws.Range(ws.Cells(CAL_DETAIL_ROW_START, CAL_DETAIL_COL), _
+             ws.Cells(gridEndRow + 10, CAL_DETAIL_COL + CAL_DETAIL_WIDTH - 1)).Borders.lineStyle = xlNone
+
+    ' ── 년월 헤더 ──
+    ws.Range(ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_START), _
+             ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_END)).ClearContents
+    On Error Resume Next
+    ws.Range(ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_START), _
+             ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_END)).MergeCells = False
+    On Error GoTo ErrH
+
+    With ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_START)
+        .Value = Format(g_CalendarMonth, "YYYY년 MM월")
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Size = 18
+        .Font.Bold = True
+        .Font.Color = CLR_TEXT_WHITE
+        .HorizontalAlignment = xlLeft
+        .VerticalAlignment = xlCenter
+    End With
+
+    With ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_END)
+        .Value = Format(Date, "YYYY-MM-DD")
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Size = 10
+        .Font.Bold = True
+        .Font.Color = CLR_CYAN
+        .HorizontalAlignment = xlRight
+        .VerticalAlignment = xlCenter
+    End With
+    ws.rows(CAL_ROW_MONTHTITLE).rowHeight = 34
+
+    ' ── 메모 영역 ──
+    With ws.Cells(CAL_ROW_MEMO, CAL_COL_START)
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Size = 9
+        .Font.Color = CLR_TEXT_DIM
+    End With
+    ws.rows(CAL_ROW_MEMO).rowHeight = 32
+
+    ' ── 요일 헤더 ──
+    Dim dowNames As Variant
+    dowNames = Array("일", "월", "화", "수", "목", "금", "토")
+    For d = 0 To 6
+        c = CAL_COL_START + d
+        With ws.Cells(CAL_ROW_DOW, c)
+            .Value = dowNames(d)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+            .Font.Name = TITLE_FONT_NAME
+            .Font.Size = 11
+            .Font.Bold = True
+            .Interior.Color = RGB(32, 36, 44)
+            If d = 0 Then
+                .Font.Color = RGB(200, 85, 85)
+            ElseIf d = 6 Then
+                .Font.Color = RGB(85, 130, 200)
+            Else
+                .Font.Color = RGB(140, 145, 155)
+            End If
+            .Borders(xlEdgeBottom).lineStyle = xlContinuous
+            .Borders(xlEdgeBottom).Color = RGB(65, 70, 80)
+            .Borders(xlEdgeBottom).Weight = xlThin
+        End With
+    Next d
+      ws.rows(CAL_ROW_DOW).rowHeight = 22
+    ' ── 날짜 그리드 ──
+    firstDay = g_CalendarMonth
+    startCell = Weekday(firstDay, vbSunday) - 1
+    lastDayOfMonth = Day(DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth) + 1, 0))
+
+     For w = 0 To CAL_WEEKS - 1
+        r = CAL_ROW_GRID_START + w * CAL_ROWS_PER_WEEK
+        ws.rows(r).rowHeight = 22          '★ 날짜행: 통일 22
+
+        For ir = 1 To CAL_ROWS_PER_WEEK - 1
+            ws.rows(r + ir).rowHeight = 15 '★ 아이템행: 통일 15
+        Next ir
+
+        For d = 0 To 6
+            dayNum = w * 7 + d - startCell + 1
+            c = CAL_COL_START + d
+
+            If dayNum < 1 Or dayNum > lastDayOfMonth Then
+                For ir = 0 To CAL_ROWS_PER_WEEK - 1
+                    ws.Cells(r + ir, c).Interior.Color = RGB(22, 24, 28)
+                    ws.Cells(r + ir, c).Font.Color = RGB(22, 24, 28)
+                Next ir
+            Else
+                dt = DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth), dayNum)
+
+                Dim bgDate As Long, fgDate As Long, bgItem As Long
+
+                If dt = Date Then
+                    bgDate = RGB(255, 255, 255): fgDate = RGB(20, 20, 25)
+                    bgItem = RGB(240, 243, 248)
+                ElseIf dt < Date Then
+                    bgDate = RGB(28, 30, 36): fgDate = RGB(75, 80, 90)
+                    bgItem = RGB(26, 28, 34)
+                ElseIf d = 0 Then
+                    bgDate = RGB(38, 30, 33): fgDate = RGB(200, 85, 85)
+                    bgItem = RGB(34, 28, 30)
+                ElseIf d = 6 Then
+                    bgDate = RGB(30, 33, 44): fgDate = RGB(85, 130, 200)
+                    bgItem = RGB(28, 30, 40)
+                Else
+                    bgDate = RGB(34, 37, 46): fgDate = RGB(210, 215, 225)
+                    bgItem = RGB(30, 33, 42)
+                End If
+
+                With ws.Cells(r, c)
+                    .Value = dayNum
+                    .Font.Name = TITLE_FONT_NAME
+                    .Font.Size = 13
+                    .Font.Bold = True
+                    .Font.Color = fgDate
+                    .Interior.Color = bgDate
+                    .HorizontalAlignment = xlCenter
+                    .VerticalAlignment = xlCenter
+                    .NumberFormat = "0"
+                    .Borders(xlEdgeBottom).lineStyle = xlContinuous
+                    .Borders(xlEdgeBottom).Color = RGB(50, 54, 62)
+                    .Borders(xlEdgeBottom).Weight = xlHairline
+                End With
+
+                For ir = 1 To CAL_ROWS_PER_WEEK - 1
+                    With ws.Cells(r + ir, c)
+                        .Value = ""
+                        .Font.Name = TITLE_FONT_NAME
+                        .Font.Size = 8
+                        .Font.Bold = True
+                        .Font.Color = CLR_TEXT_LIGHT
+                        .Interior.Color = bgItem
+                        .HorizontalAlignment = xlCenter
+                        .VerticalAlignment = xlCenter
+                    End With
+                Next ir
+            End If
+
+            ' 열 구분선
+            For ir = 0 To CAL_ROWS_PER_WEEK - 1
+                ws.Cells(r + ir, c).Borders(xlEdgeRight).lineStyle = xlContinuous
+                ws.Cells(r + ir, c).Borders(xlEdgeRight).Color = RGB(42, 46, 54)
+                ws.Cells(r + ir, c).Borders(xlEdgeRight).Weight = xlHairline
+            Next ir
+        Next d
+
+        ' 주간 하단 구분선
+        Dim lastItemR As Long: lastItemR = r + CAL_ROWS_PER_WEEK - 1
+        Dim dc As Long
+        For dc = CAL_COL_START To CAL_COL_END
+            ws.Cells(lastItemR, dc).Borders(xlEdgeBottom).lineStyle = xlContinuous
+            ws.Cells(lastItemR, dc).Borders(xlEdgeBottom).Color = RGB(55, 60, 70)
+            ws.Cells(lastItemR, dc).Borders(xlEdgeBottom).Weight = xlThin
+        Next dc
+    Next w
+
+    ' 행 높이 보호
+     ws.rows(CAL_ROW_DOW).rowHeight = 22
+    ws.rows(CAL_ROW_MONTHTITLE).rowHeight = 34
+    ws.rows(CAL_ROW_MEMO).rowHeight = 32
+    Exit Sub
+ErrH:
+    MsgBox "BuildCalendarGrid 오류: " & Err.Description, vbExclamation
+End Sub
+
+' ============================================================
+'  캘린더 항목 채우기
+' ============================================================
+Private Sub FillCalendarItems(ws As Worksheet)
+    Dim wsProd         As Worksheet
+    Dim lastR          As Long
+    Dim r              As Long
+    Dim vE             As Variant
+    Dim eDate          As Date
+    Dim proc           As String
+    Dim equip          As String
+    Dim status         As String
+    Dim dayNum         As Long
+    Dim dayDict        As Object
+    Dim w              As Long
+    Dim d              As Long
+    Dim gridRow        As Long
+    Dim c              As Long
+    Dim startCell      As Long
+    Dim lastDayOfMonth As Long
+    Dim itemRow        As Long
+    Dim dt             As Date
+    On Error GoTo ErrH
+
+    Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Set dayDict = CreateObject("Scripting.Dictionary")
+    lastR = GetLastRow(wsProd, PROD_COL_SN)
+    startCell = Weekday(g_CalendarMonth, vbSunday) - 1
+    lastDayOfMonth = Day(DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth) + 1, 0))
+
+    ' ── 수집 ──
+    If lastR >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastR
+            status = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            If status = ST_SCRAP Or status = ST_DONE Then GoTo nextCal
+
+            vE = wsProd.Cells(r, PROD_COL_END).Value
+            If Not SafeIsDate(vE) Then GoTo nextCal
+            eDate = CDate(vE)
+            If Month(eDate) <> Month(g_CalendarMonth) Or _
+               Year(eDate) <> Year(g_CalendarMonth) Then GoTo nextCal
+
+            dayNum = Day(eDate)
+            proc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            equip = SafeStr(wsProd.Cells(r, PROD_COL_EQUIP).Value)
+            If Len(equip) = 0 Then equip = "-"
+
+            If Not dayDict.Exists(dayNum) Then
+                Dim pd As Object
+                Set pd = CreateObject("Scripting.Dictionary")
+                Set dayDict(dayNum) = pd
+            End If
+
+            Dim procDict As Object: Set procDict = dayDict(dayNum)
+
+            If Not procDict.Exists(proc) Then
+                Dim ed As Object
+                Set ed = CreateObject("Scripting.Dictionary")
+                Set procDict(proc) = ed
+            End If
+
+            Dim equipDict As Object: Set equipDict = procDict(proc)
+            If equipDict.Exists(equip) Then
+                equipDict(equip) = equipDict(equip) + 1
+            Else
+                equipDict(equip) = 1
+            End If
+nextCal:
+        Next r
+    End If
+
+    ' ── 공정 우선순위 ──
+    Dim procPriority As Variant
+    procPriority = Array(PROC_FLATTENING, PROC_PLATING, PROC_HEATTREAT, _
+                         PROC_REDUCTION, PROC_SINTERING, PROC_DEGREASING)
+
+    ' ── 캘린더에 기입 ──
+    For w = 0 To CAL_WEEKS - 1
+        For d = 0 To 6
+            dayNum = w * 7 + d - startCell + 1
+            If dayNum < 1 Or dayNum > lastDayOfMonth Then GoTo nextCalCell
+            If Not dayDict.Exists(dayNum) Then GoTo nextCalCell
+
+            Set procDict = dayDict(dayNum)
+            gridRow = CAL_ROW_GRID_START + w * CAL_ROWS_PER_WEEK
+            c = CAL_COL_START + d
+            itemRow = 1
+
+            dt = DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth), dayNum)
+            Dim isToday As Boolean: isToday = (dt = Date)
+            Dim isPast As Boolean: isPast = (dt < Date)
+
+            Dim rendered As Object: Set rendered = CreateObject("Scripting.Dictionary")
+            Dim pi As Long, procName As String
+
+            ' 우선순위 공정
+            For pi = 0 To UBound(procPriority)
+                procName = CStr(procPriority(pi))
+                If procDict.Exists(procName) Then
+                    If itemRow > CAL_MAX_ITEMS_PER_DAY Then GoTo showExtra
+
+                    Set equipDict = procDict(procName)
+                    Dim eqKeys As Variant: eqKeys = equipDict.keys
+                    Dim eqi As Long
+                    Dim eqList As String: eqList = ""
+                    Dim totalQty As Long: totalQty = 0
+
+                    For eqi = 0 To UBound(eqKeys)
+                        Dim eqName As String: eqName = Replace(CStr(eqKeys(eqi)), "호기", "호")
+                        Dim eqQty As Long: eqQty = CLng(equipDict(eqKeys(eqi)))
+                        totalQty = totalQty + eqQty
+                        If Len(eqList) > 0 Then eqList = eqList & ","
+                        eqList = eqList & eqName
+                    Next eqi
+
+                    Dim lineText As String
+                    lineText = procName & " " & eqList & " " & totalQty & "매"
+                    If Len(lineText) > 20 Then lineText = Left(lineText, 18) & ".."
+
+                    With ws.Cells(gridRow + itemRow, c)
+                        .Value = lineText
+                        .Font.Name = TITLE_FONT_NAME
+                        .Font.Size = 8
+                        .Font.Bold = True
+                        .HorizontalAlignment = xlCenter
+                        .VerticalAlignment = xlCenter
+
+                        If isPast And Not isToday Then
+                            .Font.Color = RGB(75, 80, 90)
+                        Else
+                            .Font.Color = GetProcColor(procName)
+                        End If
+                    End With
+
+                    rendered(procName) = True
+                    itemRow = itemRow + 1
+                End If
+            Next pi
+
+            ' 나머지 공정
+            Dim allPKeys As Variant: allPKeys = procDict.keys
+            Dim api As Long
+            For api = 0 To UBound(allPKeys)
+                procName = CStr(allPKeys(api))
+                If Not rendered.Exists(procName) Then
+                    If itemRow > CAL_MAX_ITEMS_PER_DAY Then GoTo showExtra
+
+                    Set equipDict = procDict(procName)
+                    eqKeys = equipDict.keys
+                    eqList = "": totalQty = 0
+                    For eqi = 0 To UBound(eqKeys)
+                        eqName = Replace(CStr(eqKeys(eqi)), "호기", "호")
+                        eqQty = CLng(equipDict(eqKeys(eqi)))
+                        totalQty = totalQty + eqQty
+                        If Len(eqList) > 0 Then eqList = eqList & ","
+                        eqList = eqList & eqName
+                    Next eqi
+
+                    lineText = procName & " " & eqList & " " & totalQty & "매"
+                    If Len(lineText) > 20 Then lineText = Left(lineText, 18) & ".."
+
+                    With ws.Cells(gridRow + itemRow, c)
+                        .Value = lineText
+                        .Font.Name = TITLE_FONT_NAME
+                        .Font.Size = 8
+                        .Font.Bold = True
+                        .HorizontalAlignment = xlCenter
+                        .VerticalAlignment = xlCenter
+                        If isPast And Not isToday Then
+                            .Font.Color = RGB(75, 80, 90)
+                        Else
+                            .Font.Color = GetProcColor(procName)
+                        End If
+                    End With
+                    itemRow = itemRow + 1
+                End If
+            Next api
+
+            GoTo nextCalCell
+
+showExtra:
+            Dim extraCnt As Long: extraCnt = procDict.count - (itemRow - 1)
+            If extraCnt > 0 Then
+                Dim extraRow As Long
+                extraRow = gridRow + itemRow
+                If extraRow <= gridRow + CAL_ROWS_PER_WEEK - 1 Then
+                    With ws.Cells(extraRow, c)
+                        .Value = "+" & extraCnt & "건"
+                        .Font.Color = RGB(180, 130, 60)
+                        .Font.Size = 7
+                        .Font.Bold = True
+                        .Font.Name = TITLE_FONT_NAME
+                        .HorizontalAlignment = xlCenter
+                    End With
+                End If
+            End If
+
+nextCalCell:
+        Next d
+    Next w
+    Exit Sub
+ErrH:
+    MsgBox "FillCalendarItems 오류: " & Err.Description & vbCrLf & _
+           "w=" & w & " d=" & d & " dayNum=" & dayNum, vbExclamation
+End Sub
+
+' ============================================================
+'  날짜 클릭 이벤트
+' ============================================================
+Public Sub HandleCalendarClick(Target As Range)
+    Dim ws             As Worksheet
+    Dim r              As Long
+    Dim c              As Long
+    Dim dayNum         As Long
+    Dim lastDayOfMonth As Long
+    On Error GoTo ErrH
+
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    r = Target.row
+    c = Target.Column
+
+    If c < CAL_COL_START Or c > CAL_COL_END Then Exit Sub
+    If r < CAL_ROW_GRID_START Then Exit Sub
+
+    Dim gridEnd As Long
+    gridEnd = CAL_ROW_GRID_START + CAL_WEEKS * CAL_ROWS_PER_WEEK - 1
+    If r > gridEnd Then Exit Sub
+
+    lastDayOfMonth = Day(DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth) + 1, 0))
+    dayNum = 0
+
+    Dim weekBase As Long
+    weekBase = CAL_ROW_GRID_START + _
+               Int((r - CAL_ROW_GRID_START) / CAL_ROWS_PER_WEEK) * CAL_ROWS_PER_WEEK
+
+    Dim baseVal As Variant: baseVal = ws.Cells(weekBase, c).Value
+    If IsNumeric(baseVal) And baseVal <> "" Then
+        Dim tmpDay As Long: tmpDay = CLng(baseVal)
+        If tmpDay >= 1 And tmpDay <= lastDayOfMonth Then dayNum = tmpDay
+    End If
+
+    If dayNum = 0 Then Exit Sub
+
+    Dim clickDate As Date
+    clickDate = DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth), dayNum)
+    ShowDayDetail clickDate
+    Exit Sub
+ErrH:
+    MsgBox "HandleCalendarClick 오류: " & Err.Description, vbExclamation
+End Sub
+
+' ============================================================
+'  날짜 클릭 상세
+' ============================================================
+Public Sub ShowDayDetail(clickDate As Date)
+    Dim ws      As Worksheet
+    Dim wsProd  As Worksheet
+    Dim lastR   As Long
+    Dim r       As Long
+    Dim detailR As Long
+    Dim vE      As Variant
+    Dim status  As String
+    Dim proc    As String
+    Dim equip   As String
+    Dim pName   As String
+    Dim route   As String
+    On Error GoTo ErrH
+
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    lastR = GetLastRow(wsProd, PROD_COL_SN)
+    detailR = CAL_DETAIL_ROW_START
+
+    Dim cK As Long: cK = CAL_DETAIL_COL
+    Dim cl As Long: cl = CAL_DETAIL_COL + 1
+    Dim cM As Long: cM = CAL_DETAIL_COL + 2
+    Dim cN As Long: cN = CAL_DETAIL_COL + 3
+
+    ' ── 클리어 (상세패널 열만, 행 높이 건드리지 않음) ──
+    Dim detailEndRow As Long: detailEndRow = detailR + 50
+    Dim clrRng As Range
+    Set clrRng = ws.Range(ws.Cells(detailR, cK), ws.Cells(detailEndRow, cN))
+    On Error Resume Next
+    clrRng.UnMerge
+    On Error GoTo ErrH
+    clrRng.ClearContents
+    clrRng.Interior.Color = CLR_BG_DARK
+    clrRng.Borders.lineStyle = xlNone
+    clrRng.Font.Name = TITLE_FONT_NAME
+
+    ' ── 날짜 헤더 ──
+    Dim dowKor As String
+    Select Case Weekday(clickDate, vbSunday)
+        Case 1: dowKor = "일"
+        Case 2: dowKor = "월"
+        Case 3: dowKor = "화"
+        Case 4: dowKor = "수"
+        Case 5: dowKor = "목"
+        Case 6: dowKor = "금"
+        Case 7: dowKor = "토"
+    End Select
+
+    With ws.Cells(detailR, cK)
+        .Value = Month(clickDate) & "/" & Day(clickDate) & " " & dowKor & "요일"
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+        .Font.Size = 15
+        .HorizontalAlignment = xlLeft
+        .VerticalAlignment = xlCenter
+    End With
+    detailR = detailR + 1
+
+    ' 구분선
+    Dim lc As Long
+    For lc = cK To cN
+        ws.Cells(detailR, lc).Interior.Color = CLR_CYAN
+    Next lc
+    detailR = detailR + 1
+
+    ' 간격
+    detailR = detailR + 1
+
+    ' ── 데이터 수집 ? 완료 예정만 ──
+    Dim endPE As Object: Set endPE = CreateObject("Scripting.Dictionary")
+    Dim endProd As Object: Set endProd = CreateObject("Scripting.Dictionary")
+    Dim endTotal As Long: endTotal = 0
+
+    If lastR >= PROD_DATA_START Then
+        For r = PROD_DATA_START To lastR
+            status = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            If status = ST_SCRAP Or status = ST_DONE Then GoTo nextDetail
+
+            vE = wsProd.Cells(r, PROD_COL_END).Value
+            If Not SafeIsDate(vE) Then GoTo nextDetail
+            If CDate(vE) <> clickDate Then GoTo nextDetail
+
+            proc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            equip = SafeStr(wsProd.Cells(r, PROD_COL_EQUIP).Value)
+            pName = SafeStr(wsProd.Cells(r, PROD_COL_PRODUCT).Value)
+            route = SafeStr(wsProd.Cells(r, PROD_COL_ROUTE).Value)
+
+            Dim peKey As String: peKey = proc & "|" & equip
+            Dim prodKey As String
+
+            If Not endPE.Exists(peKey) Then endPE(peKey) = route
+            prodKey = peKey & "|" & pName
+            If endProd.Exists(prodKey) Then
+                endProd(prodKey) = endProd(prodKey) + 1
+            Else
+                endProd(prodKey) = 1
+            End If
+            endTotal = endTotal + 1
+nextDetail:
+        Next r
+    End If
+
+    ' ── 섹션 제목 ──
+    With ws.Cells(detailR, cK)
+        .Value = ChrW(&H25A0) & " 완료 예정  (" & endTotal & "매)"
+        .Font.Name = TITLE_FONT_NAME
+        .Font.Size = 11
+        .Font.Bold = True
+        .Font.Color = CLR_CYAN
+        .HorizontalAlignment = xlLeft
+    End With
+    detailR = detailR + 1
+
+    ' ── 컬럼 헤더 ──
+    Dim headers As Variant: headers = Array("공정", "제품", "수량", "NEXT")
+    Dim aligns As Variant: aligns = Array(xlLeft, xlLeft, xlCenter, xlCenter)
+    Dim hc As Long
+
+    For hc = 0 To 3
+        With ws.Cells(detailR, cK + hc)
+            .Value = headers(hc)
+            .Font.Name = TITLE_FONT_NAME
+            .Font.Size = 9
+            .Font.Color = RGB(120, 125, 135)
+            .Font.Bold = True
+            .HorizontalAlignment = aligns(hc)
+            .Interior.Color = RGB(32, 36, 44)
+            .Borders(xlEdgeBottom).lineStyle = xlContinuous
+            .Borders(xlEdgeBottom).Color = RGB(50, 55, 65)
+            .Borders(xlEdgeBottom).Weight = xlHairline
+        End With
+    Next hc
+    detailR = detailR + 1
+
+    ' ── 데이터 출력 ──
+    If endPE.count > 0 Then
+        Dim epeKeys As Variant: epeKeys = endPE.keys
+        Dim ei As Long
+        For ei = 0 To UBound(epeKeys)
+            Dim ePE As String: ePE = CStr(epeKeys(ei))
+            Dim epParts() As String: epParts = Split(ePE, "|")
+            Dim epKeys As Variant: epKeys = endProd.keys
+            Dim epi As Long
+            Dim isFirstE As Boolean: isFirstE = True
+
+            For epi = 0 To UBound(epKeys)
+                If Left(CStr(epKeys(epi)), Len(ePE) + 1) = ePE & "|" Then
+                    Dim epName As String: epName = Mid(CStr(epKeys(epi)), Len(ePE) + 2)
+                    Dim epQty As Long: epQty = CLng(endProd(epKeys(epi)))
+
+                    ' 공정 열
+                    If isFirstE Then
+                        Dim eDisp As String
+                        If Len(epParts(1)) > 0 Then
+                            eDisp = epParts(0) & " " & epParts(1)
+                        Else
+                            eDisp = epParts(0)
+                        End If
+                        With ws.Cells(detailR, cK)
+                            .Value = eDisp
+                            .Font.Name = TITLE_FONT_NAME
+                            .Font.Color = GetProcColor(epParts(0))
+                            .Font.Size = 10
+                            .Font.Bold = True
+                            .HorizontalAlignment = xlLeft
+                        End With
+
+                        Dim eRoute As String: eRoute = CStr(endPE(epeKeys(ei)))
+                        Dim eNext As String: eNext = GetNextProc(epParts(0), eRoute)
+                        If eNext <> "" Then
+                            With ws.Cells(detailR, cN)
+                                .Value = ChrW(&H2192) & " " & eNext
+                                .Font.Name = TITLE_FONT_NAME
+                                .Font.Color = RGB(100, 180, 140)
+                                .Font.Size = 9
+                                .HorizontalAlignment = xlCenter
+                            End With
+                        End If
+                        isFirstE = False
+                    End If
+
+                    Dim dispName As String: dispName = epName
+                    If Len(dispName) > 12 Then dispName = Left(dispName, 10) & ".."
+                    With ws.Cells(detailR, cl)
+                        .Value = dispName
+                        .Font.Name = TITLE_FONT_NAME
+                        .Font.Color = RGB(210, 215, 225)
+                        .Font.Size = 10
+                        .HorizontalAlignment = xlLeft
+                    End With
+
+                    With ws.Cells(detailR, cM)
+                        .Value = epQty & "매"
+                        .Font.Name = TITLE_FONT_NAME
+                        .Font.Color = RGB(240, 242, 248)
+                        .Font.Size = 10
+                        .Font.Bold = True
+                        .HorizontalAlignment = xlCenter
+                    End With
+
+                    Dim cc As Long
+                    For cc = cK To cN
+                        ws.Cells(detailR, cc).Interior.Color = CLR_BG_DARK
+                        ws.Cells(detailR, cc).Borders(xlEdgeBottom).lineStyle = xlContinuous
+                        ws.Cells(detailR, cc).Borders(xlEdgeBottom).Color = RGB(40, 44, 52)
+                        ws.Cells(detailR, cc).Borders(xlEdgeBottom).Weight = xlHairline
+                    Next cc
+                    detailR = detailR + 1
+                End If
+            Next epi
+        Next ei
+
+        ' 합계
+        detailR = detailR + 1
+
+        With ws.Cells(detailR, cK)
+            .Value = "TOTAL"
+            .Font.Name = TITLE_FONT_NAME
+            .Font.Size = 10
+            .Font.Bold = True
+            .Font.Color = RGB(140, 145, 155)
+            .HorizontalAlignment = xlLeft
+        End With
+        With ws.Cells(detailR, cM)
+            .Value = endTotal & "매"
+            .Font.Name = TITLE_FONT_NAME
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = CLR_CYAN
+            .HorizontalAlignment = xlCenter
+        End With
+        For cc = cK To cN
+            ws.Cells(detailR, cc).Borders(xlEdgeTop).lineStyle = xlContinuous
+            ws.Cells(detailR, cc).Borders(xlEdgeTop).Color = RGB(55, 60, 70)
+            ws.Cells(detailR, cc).Borders(xlEdgeTop).Weight = xlThin
+        Next cc
+    Else
+        With ws.Cells(detailR, cK)
+            .Value = "완료 예정 없음"
+            .Font.Name = TITLE_FONT_NAME
+            .Font.Color = RGB(100, 105, 115)
+            .Font.Size = 10
+            .HorizontalAlignment = xlLeft
+        End With
+        detailR = detailR + 1
+    End If
+
+    ' 좌측 액센트 라인
+    Dim acR As Long
+    For acR = CAL_DETAIL_ROW_START To detailR
+        With ws.Cells(acR, cK).Borders(xlEdgeLeft)
+            .lineStyle = xlContinuous
+            .Color = CLR_CYAN
+            .Weight = xlMedium
+        End With
+    Next acR
+
+    ' ??????????????????????????????????????????????
+    '  ★★★ 전체 행 높이 강제 복원 (핵심) ★★★
+    ' ??????????????????????????????????????????????
+    ws.rows(1).rowHeight = 8
+    ws.rows(CAL_ROW_TITLE).rowHeight = 38
+    ws.rows(CAL_ROW_KPI).rowHeight = 20
+    ws.rows(CAL_ROW_MEMO).rowHeight = 32
+    ws.rows(5).rowHeight = 6
+    ws.rows(CAL_ROW_MONTHTITLE).rowHeight = 34
+    ws.rows(CAL_ROW_DOW).rowHeight = 22
+
+    ' ★ 그리드 날짜행 + 아이템행 전부 복원
+    Dim gw As Long, gr As Long, gir As Long
+    For gw = 0 To CAL_WEEKS - 1
+        gr = CAL_ROW_GRID_START + gw * CAL_ROWS_PER_WEEK
+        ws.rows(gr).rowHeight = 22
+        For gir = 1 To CAL_ROWS_PER_WEEK - 1
+            ws.rows(gr + gir).rowHeight = 15
+        Next gir
+    Next gw
+
+    Exit Sub
+ErrH:
+    MsgBox "ShowDayDetail 오류: " & Err.Description, vbExclamation
+End Sub
+
+' ============================================================
+'  월 이동
+' ============================================================
+Public Sub CalendarPrevMonth()
+    If g_CalendarMonth = 0 Then g_CalendarMonth = DateSerial(Year(Date), Month(Date), 1)
+    g_CalendarMonth = DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth) - 1, 1)
+    RefreshCalendar
+End Sub
+
+Public Sub CalendarNextMonth()
+    If g_CalendarMonth = 0 Then g_CalendarMonth = DateSerial(Year(Date), Month(Date), 1)
+    g_CalendarMonth = DateSerial(Year(g_CalendarMonth), Month(g_CalendarMonth) + 1, 1)
+    RefreshCalendar
+End Sub
+
+Public Sub CalendarToday()
+    g_CalendarMonth = DateSerial(Year(Date), Month(Date), 1)
+    RefreshCalendar
+End Sub
+
+' ============================================================
+'  캘린더 버튼
+' ============================================================
+Public Sub BuildCalendarButtons(ws As Worksheet)
+    Dim shp     As Shape
+    Dim topPos  As Single
+    Dim leftPos As Single
+    Dim btnH    As Single
+    Dim btnW    As Single
+    Dim gap     As Single
+    Dim ri      As Long
+    On Error GoTo ErrH
+
+    ' 기존 버튼 삭제
+    Dim i As Long
+    For i = ws.Shapes.count To 1 Step -1
+        If Left(ws.Shapes(i).Name, 8) = "BTN_CAL_" Then ws.Shapes(i).Delete
+    Next i
+
+    ' 위치 계산
+    topPos = 0
+    For ri = 1 To CAL_ROW_MONTHTITLE - 1
+        topPos = topPos + ws.rows(ri).Height
+    Next ri
+    btnH = 22
+    topPos = topPos + (ws.rows(CAL_ROW_MONTHTITLE).Height - btnH) / 2
+
+    leftPos = ws.Cells(CAL_ROW_MONTHTITLE, CAL_COL_START + 2).Left + 4
+    btnW = 36
+    gap = 4
+
+       ' ◀ 이전 (계속)
+     Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  leftPos, topPos, btnW, btnH)
+     With shp
+        .Name = "BTN_CAL_PREV"
+        .TextFrame2.TextRange.text = ChrW(&H25C0)
+        .TextFrame2.TextRange.Font.Size = 9
+        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_TEXT_LIGHT
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .Fill.ForeColor.RGB = CLR_BG_MID
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+        .OnAction = "CalendarPrevMonth"
+    End With
+
+    ' 오늘
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  leftPos + btnW + gap, topPos, btnW + 16, btnH)
+    With shp
+        .Name = "BTN_CAL_TODAY"
+        .TextFrame2.TextRange.text = "오늘"
+        .TextFrame2.TextRange.Font.Size = 9
+        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_CYAN
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .Fill.ForeColor.RGB = CLR_BG_MID
+        .line.ForeColor.RGB = CLR_CYAN
+        .line.Weight = 0.75
+        .line.Visible = msoTrue
+        .Placement = xlFreeFloating
+        .OnAction = "CalendarToday"
+    End With
+
+    ' ▶ 다음
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  leftPos + btnW + gap + btnW + 16 + gap, topPos, btnW, btnH)
+    With shp
+        .Name = "BTN_CAL_NEXT"
+        .TextFrame2.TextRange.text = ChrW(&H25B6)
+        .TextFrame2.TextRange.Font.Size = 9
+        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = CLR_TEXT_LIGHT
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .Fill.ForeColor.RGB = CLR_BG_MID
+        .line.Visible = msoFalse
+        .Placement = xlFreeFloating
+        .OnAction = "CalendarNextMonth"
+    End With
+    Exit Sub
+ErrH:
+    MsgBox "BuildCalendarButtons 오류: " & Err.Description, vbExclamation
+End Sub
+
+' ============================================================
+'  이슈 보드 - 제품별 카드 도형
+' ============================================================
+Public Sub BuildIssueBoard(ws As Worksheet)
+    Dim shp As Shape
+    Dim i   As Long
+    On Error Resume Next
+    
+    ' ── 기존 도형 삭제 ──
+    For i = ws.Shapes.count To 1 Step -1
+        If Left(ws.Shapes(i).Name, 10) = "SHP_ISSUE_" Or _
+           ws.Shapes(i).Name = "SHP_ISSUE_BOARD" Then
+            ws.Shapes(i).Delete
+        End If
+    Next i
+    On Error GoTo ErrH
+    
+    ' ── 데이터 수집 (요약용) ──
+    Dim wsProd As Worksheet
+    Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Dim lastR As Long: lastR = GetLastRow(wsProd, PROD_COL_SN)
+    
+    Dim prodCounts As Object: Set prodCounts = CreateObject("Scripting.Dictionary")
+    Dim totalIssues As Long: totalIssues = 0
+    
+    If lastR >= PROD_DATA_START Then
+        Dim r As Long
+        For r = PROD_DATA_START To lastR
+            Dim st As String: st = SafeStr(wsProd.Cells(r, PROD_COL_STATUS).Value)
+            Dim sn As String: sn = SafeStr(wsProd.Cells(r, PROD_COL_SN).Value)
+            Dim pName As String: pName = SafeStr(wsProd.Cells(r, PROD_COL_PRODUCT).Value)
+            Dim proc As String: proc = SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value)
+            Dim memo As String: memo = SafeStr(wsProd.Cells(r, PROD_COL_INSP_MEMO).Value)
+            
+            If Len(pName) = 0 Or Len(sn) = 0 Then GoTo nxtSum
+            
+            Dim hasIssue As Boolean: hasIssue = False
+            If st = ST_SCRAP Then hasIssue = True
+            If st = ST_DELAY Then hasIssue = True
+            If proc = NG_SUB Then hasIssue = True
+            If proc = PROC_FLATTENING And SafeLng(wsProd.Cells(r, PROD_COL_INSP_COUNT).Value) > 0 Then hasIssue = True
+            If Len(memo) > 0 Then hasIssue = True
+            
+            If hasIssue Then
+                totalIssues = totalIssues + 1
+                If prodCounts.Exists(pName) Then
+                    prodCounts(pName) = prodCounts(pName) + 1
+                Else
+                    prodCounts(pName) = 1
+                End If
+            End If
+nxtSum:
+        Next r
+    End If
+    
+    ' 수동 메모 카운트
+    Dim mLastR As Long
+    mLastR = GetLastRow(ws, CAL_MEMO_STORE_COL)
+    If mLastR >= CAL_MEMO_STORE_START Then
+        Dim mr As Long
+        For mr = CAL_MEMO_STORE_START To mLastR
+            Dim mProd As String: mProd = SafeStr(ws.Cells(mr, CAL_MEMO_STORE_COL).Value)
+            Dim mText As String: mText = SafeStr(ws.Cells(mr, CAL_MEMO_STORE_COL3).Value)
+            If Len(mProd) > 0 And Len(mText) > 0 Then
+                totalIssues = totalIssues + 1
+                If prodCounts.Exists(mProd) Then
+                    prodCounts(mProd) = prodCounts(mProd) + 1
+                Else
+                    prodCounts(mProd) = 1
+                End If
+            End If
+        Next mr
+    End If
+    
+    ' ── 요약 텍스트 조립 ──
+    Dim sumText As String
+    sumText = "[!] ISSUE BOARD  (" & totalIssues & "건)"
+    
+    Dim sumDetail As String: sumDetail = ""
+    Dim pk As Variant
+    For Each pk In prodCounts.keys
+        If Len(sumDetail) > 0 Then sumDetail = sumDetail & "  |  "
+        sumDetail = sumDetail & CStr(pk) & ": " & prodCounts(pk) & "건"
+    Next pk
+    
+    If Len(sumDetail) = 0 Then sumDetail = "이슈 없음"
+    sumText = sumText & vbLf & sumDetail & vbLf & "> 클릭하여 상세 보기"
+    
+    ' ── 도형 생성 ──
+    Dim shpLeft As Single
+    shpLeft = ws.Cells(2, 7).Left + 6         'F?? ??
+    Dim shpTop As Single
+    shpTop = ws.Cells(2, 5).Top + 2            '2? ??
+    Dim shpW As Single: shpW = 340             '260 ∪ 340 ??
+    Dim shpH As Single: shpH = 90              '72 ∪ 90 ??
+    
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+                  shpLeft, shpTop, shpW, shpH)
+    
+    With shp
+        .Name = "SHP_ISSUE_BOARD"
+        .Fill.ForeColor.RGB = RGB(24, 28, 36)
+        .Fill.Transparency = 0
+        .line.ForeColor.RGB = RGB(255, 200, 80)
+        .line.Weight = 1.2
+        .line.Visible = msoTrue
+        .Shadow.Type = msoShadow21
+        .Shadow.ForeColor.RGB = RGB(0, 0, 0)
+        .Shadow.Transparency = 0.65
+        .Shadow.OffsetX = 3
+        .Shadow.OffsetY = 3
+        .Placement = xlFreeFloating
+        .OnAction = "ShowIssueBoardForm"
+        
+        With .TextFrame2
+            .MarginLeft = 12
+            .MarginRight = 8
+            .MarginTop = 8
+            .MarginBottom = 6
+            .WordWrap = msoTrue
+            .AutoSize = msoAutoSizeNone
+            .VerticalAnchor = msoAnchorTop
+            
+            .TextRange.text = sumText
+            .TextRange.Font.Name = TITLE_FONT_NAME
+            .TextRange.Font.Size = 10
+            .TextRange.Font.Fill.ForeColor.RGB = CLR_TEXT_LIGHT
+            
+            ' 1행 헤더 서식
+            Dim hdrLen As Long
+            hdrLen = InStr(sumText, vbLf) - 1
+            If hdrLen > 0 Then
+                .TextRange.Characters(1, hdrLen).Font.Size = 14
+                .TextRange.Characters(1, hdrLen).Font.Bold = msoTrue
+                .TextRange.Characters(1, hdrLen).Font.Fill.ForeColor.RGB = RGB(255, 200, 80)
+            End If
+            
+            ' 마지막행 서식
+            Dim lastLine As String: lastLine = "> 클릭하여 상세 보기"
+            Dim lastStart As Long: lastStart = Len(sumText) - Len(lastLine) + 1
+            If lastStart > 0 Then
+                .TextRange.Characters(lastStart, Len(lastLine)).Font.Size = 8
+                .TextRange.Characters(lastStart, Len(lastLine)).Font.Fill.ForeColor.RGB = RGB(120, 130, 150)
+            End If
+        End With
+    End With
+    
+    Exit Sub
+ErrH:
+    MsgBox "BuildIssueBoard 오류: " & Err.Description, vbExclamation
+End Sub
+
+' ============================================================
+'  이슈 카드 클릭 → InputBox 메모 추가
+' ============================================================
+Public Sub IssueCardClick()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    
+    ' 제품명
+    Dim prodName As String
+    prodName = InputBox("제품명 입력:" & vbCrLf & vbCrLf & _
+                        "(기존 제품명 또는 새 제품명)", _
+                        "이슈 메모 추가")
+    If Len(prodName) = 0 Then Exit Sub
+    
+    ' S/N (선택)
+    Dim snVal As String
+    snVal = InputBox("S/N 입력 (없으면 빈칸):" & vbCrLf & _
+                     "제품: " & prodName, "이슈 메모 - S/N")
+    
+    ' 메모 내용
+    Dim memoText As String
+    memoText = InputBox("이슈 내용:" & vbCrLf & _
+                        "제품: " & prodName & vbCrLf & _
+                        "S/N: " & snVal, "이슈 메모")
+    If Len(memoText) = 0 Then Exit Sub
+    
+    ' AA~AD열에 저장
+    Dim storeR As Long
+    storeR = GetLastRow(ws, CAL_MEMO_STORE_COL) + 1
+    If storeR < CAL_MEMO_STORE_START Then storeR = CAL_MEMO_STORE_START
+    
+    ws.Cells(storeR, CAL_MEMO_STORE_COL).Value = prodName
+    ws.Cells(storeR, CAL_MEMO_STORE_COL2).Value = snVal
+    ws.Cells(storeR, CAL_MEMO_STORE_COL3).Value = memoText
+    ws.Cells(storeR, CAL_MEMO_STORE_COL4).Value = Format(Now, "MM/DD")
+    
+    ' 새로고침
+    RefreshCalendar
+End Sub
+
+' ============================================================
+'  + 새 이슈 추가 (빈 영역 클릭 또는 버튼)
+' ============================================================
+Public Sub AddNewIssue()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    
+    Dim prodName As String
+    prodName = InputBox("제품명:", "새 이슈 등록")
+    If Len(prodName) = 0 Then Exit Sub
+    
+    Dim snVal As String
+    snVal = InputBox("S/N (없으면 빈칸):", "새 이슈 - S/N")
+    
+    Dim memoText As String
+    memoText = InputBox("이슈 내용:", "새 이슈 - 메모")
+    If Len(memoText) = 0 Then Exit Sub
+    
+    Dim storeR As Long
+    storeR = GetLastRow(ws, CAL_MEMO_STORE_COL) + 1
+    If storeR < CAL_MEMO_STORE_START Then storeR = CAL_MEMO_STORE_START
+    
+    ws.Cells(storeR, CAL_MEMO_STORE_COL).Value = prodName
+    ws.Cells(storeR, CAL_MEMO_STORE_COL2).Value = snVal
+    ws.Cells(storeR, CAL_MEMO_STORE_COL3).Value = memoText
+    ws.Cells(storeR, CAL_MEMO_STORE_COL4).Value = Format(Now, "MM/DD")
+    
+    RefreshCalendar
+    MsgBox "이슈 등록 완료", vbInformation
+End Sub
+
+Public Sub ToggleIssueBoard()
+    g_IssueBoardExpanded = Not g_IssueBoardExpanded
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    BuildIssueBoard ws
+End Sub
+Public Sub ShowIssueBoardForm()
+    Dim frm As frmIssueBoard
+    Set frm = New frmIssueBoard
+    frm.Show vbModal
+    
+    ' UserForm 닫힌 후 도형 갱신
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.sheets(SHT_CALENDAR)
+    BuildIssueBoard ws
+End Sub
+
+
