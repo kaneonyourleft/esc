@@ -803,11 +803,7 @@ window.toggleGroup = function(key) {
   renderWorkspace();
 };
 
-function renderWorkspace() {
-  const table = document.getElementById('wsTable');
-  if (!table) return;
-
-  // 드롭다운 옵션 자동 채우기
+function updateFilterOptions() {
   const prodSet = new Set(), batchSet = new Set(), equipSet = new Set(), procSet = new Set();
   Object.entries(DATA).forEach(([sn, d]) => {
     if (d.productName) prodSet.add(d.productName);
@@ -830,6 +826,14 @@ function renderWorkspace() {
   fillSel("wsFilterBatch", batchSet);
   fillSel("wsFilterEquip", equipSet);
   fillSel("wsFilterProc", procSet);
+}
+
+function renderWorkspace() {
+  const table = document.getElementById('wsTable');
+  if (!table) return;
+  updateFilterOptions();
+
+
 
   const search = (document.getElementById('wsSearch')?.value || '').toLowerCase();
   const fStatus = document.getElementById("wsFilterStatus")?.value || "";
