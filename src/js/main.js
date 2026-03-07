@@ -2747,7 +2747,104 @@ window.downloadQR = function() {
 };
 
 // === 제품 등록 ===
-window.openProductModal = function() { openModal('productModal'); };
+﻿  window.openProductModal = function() {
+    showProductList();
+    openModal('productModal');
+  };
+
+  function showProductList() {
+    var lv = document.getElementById('pm_listView');
+    var fv = document.getElementById('pm_formView');
+    var tt = document.getElementById('pm_title');
+    if (lv) lv.style.display = '';
+    if (fv) fv.style.display = 'none';
+    if (tt) tt.textContent = String.fromCodePoint(0x1F4E6) + ' 제품 관리';
+    renderProductList();
+  }
+
+  window.showProductForm = function(editName) {
+    var lv = document.getElementById('pm_listView');
+    var fv = document.getElementById('pm_formView');
+    if (lv) lv.style.display = 'none';
+    if (fv) fv.style.display = '';
+    document.getElementById('pm_editMode').value = editName ? 'edit' : '';
+    document.getElementById('pm_origName').value = editName || '';
+    if (editName && PRODUCTS[editName]) {
+      var p = PRODUCTS[editName];
+      document.getElementById('pm_title').textContent = String.fromCodePoint(0x1F4E6) + ' 제품 수정';
+      document.getElementById('pm_saveBtn').textContent = '수정';
+      document.getElementById('pm_name').value = p.name || editName;
+      document.getElementById('pm_name').disabled = true;
+      document.getElementById('pm_cat').value = p.category || 'WN';
+      document.getElementById('pm_heat').value = p.heatTreat === true ? 'Y' : (p.heat || 'N');
+      document.getElementById('pm_drawing').value = p.drawing || '';
+      document.getElementById('pm_shrink').value = p.shrinkage || p.shrink || 0;
+      document.getElementById('pm_stack').value = p.stackQty || p.stack || 0;
+      document.getElementById('pm_joint').value = p.dcJoint || p.joint || '';
+      document.getElementById('pm_d1').value = p.d1 != null ? p.d1 : 6;
+      document.getElementById('pm_d2').value = p.d2 != null ? p.d2 : 5;
+      document.getElementById('pm_d3').value = p.d3 != null ? p.d3 : 0;
+      document.getElementById('pm_d4').value = p.d4 != null ? p.d4 : 3;
+      document.getElementById('pm_d5').value = p.d5 != null ? p.d5 : 1;
+      document.getElementById('pm_d6').value = p.d6 != null ? p.d6 : 0;
+    } else {
+      document.getElementById('pm_title').textContent = String.fromCodePoint(0x1F4E6) + ' 제품 등록';
+      document.getElementById('pm_saveBtn').textContent = '등록';
+      document.getElementById('pm_name').value = '';
+      document.getElementById('pm_name').disabled = false;
+      document.getElementById('pm_cat').value = 'WN';
+      document.getElementById('pm_heat').value = 'N';
+      document.getElementById('pm_drawing').value = '';
+      document.getElementById('pm_shrink').value = '0';
+      document.getElementById('pm_stack').value = '0';
+      document.getElementById('pm_joint').value = '';
+      document.getElementById('pm_d1').value = '6';
+      document.getElementById('pm_d2').value = '5';
+      document.getElementById('pm_d3').value = '0';
+      document.getElementById('pm_d4').value = '3';
+      document.getElementById('pm_d5').value = '1';
+      document.getElementById('pm_d6').value = '0';
+    }
+    previewRoute();
+  };
+
+  window.previewRoute = function() {
+    var cat = document.getElementById('pm_cat').value;
+    var heat = document.getElementById('pm_heat').value;
+    var dc = document.getElementById('pm_joint').value;
+    var route = buildRoute(cat, heat, dc);
+    var el = document.getElementById('pm_routePreview');
+    if (el) el.innerHTML = route.map(function(p){ return '<span style="display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;color:#fff;background:' + (PROC_COLORS[p]||'#666') + '">' + esc(p) + '</span>'; }).join(' \u2192 ');
+  };
+
+  function renderProductList() {
+    var container = document.getElementById('pm_productList');
+    var countEl = document.getElementById('pm_count');
+    if (!container) return;
+    var keys = Object.keys(PRODUCTS).sort();
+    if (countEl) countEl.textContent = keys.length;
+    if (keys.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:#999">등록된 제품이 없습니다</div>';
+      return;
+    }
+    container.innerHTML = keys.map(function(k) {
+      var p = PRODUCTS[k];
+      var route = p.route || [];
+      var routeBadges = route.map(function(r){ return '<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:8px;font-size:10px;color:#fff;background:' + (PROC_COLORS[r]||'#666') + '">' + esc(r) + '</span>'; }).join(' ');
+      var snCount = Object.values(DATA).filter(function(d){ return d.productName === k; }).length;
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;margin-bottom:6px;background:var(--bg3);border-radius:8px;border:1px solid var(--bd1)">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-weight:600;font-size:13px">' + esc(k) + '</div>'
+        + '<div style="font-size:11px;color:#999;margin-top:2px">' + (p.drawing||'') + ' | DC: ' + (p.dcJoint||p.joint||'-') + ' | S/N: ' + snCount + '건</div>'
+        + '<div style="margin-top:4px">' + routeBadges + '</div>'
+        + '</div>'
+        + '<div style="display:flex;gap:4px;margin-left:8px;flex-shrink:0">'
+        + '<button class="btn btn-secondary btn-sm" onclick="showProductForm(\x27' + esc(k) + '\x27)">수정</button>'
+        + '<button class="btn btn-sm" style="background:#ef4444;color:#fff" onclick="deleteProduct(\x27' + esc(k) + '\x27,' + snCount + ')">삭제</button>'
+        + '</div></div>';
+    }).join('');
+  }
+
 
 ['pm_cat', 'pm_heat'].forEach(id => {
   const el = document.getElementById(id);
