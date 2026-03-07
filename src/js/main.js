@@ -2749,7 +2749,7 @@ window.downloadQR = function() {
 // === 제품 등록 ===
   window.openProductModal = function() {
     openModal("productModal");
-    setTimeout(function(){ if (typeof showProductList === "function") showProductList(); }, 50);
+    setTimeout(function(){ try { showProductList(); } catch(e) { console.warn("showProductList error:", e); } }, 200);
   };
 
   window.showProductList = function() {
@@ -2758,7 +2758,7 @@ window.downloadQR = function() {
     var tt = document.getElementById("pm_title");
     if (lv) lv.style.display = "";
     if (fv) fv.style.display = "none";
-    if (tt) tt.textContent = "\ud83d\udce6 \uc81c\ud488 \uad00\ub9ac";
+    if (tt) tt.textContent = "📦 제품 관리";
     if (typeof renderProductList === "function") renderProductList();
   };
 
@@ -2771,7 +2771,7 @@ window.downloadQR = function() {
     document.getElementById('pm_origName').value = editName || '';
     if (editName && PRODUCTS[editName]) {
       var p = PRODUCTS[editName];
-      document.getElementById('pm_title').textContent = String.fromCodePoint(0x1F4E6) + ' 제품 수정';
+      var ttl = document.getElementById('pm_title'); if (ttl) ttl.textContent = '📦 제품 수정';
       document.getElementById('pm_saveBtn').textContent = '수정';
       document.getElementById('pm_name').value = p.name || editName;
       document.getElementById('pm_name').disabled = true;
@@ -2788,7 +2788,7 @@ window.downloadQR = function() {
       document.getElementById('pm_d5').value = p.d5 != null ? p.d5 : 1;
       document.getElementById('pm_d6').value = p.d6 != null ? p.d6 : 0;
     } else {
-      document.getElementById('pm_title').textContent = String.fromCodePoint(0x1F4E6) + ' 제품 등록';
+      var ttl2 = document.getElementById('pm_title'); if (ttl2) ttl2.textContent = '📦 제품 등록';
       document.getElementById('pm_saveBtn').textContent = '등록';
       document.getElementById('pm_name').value = '';
       document.getElementById('pm_name').disabled = false;
