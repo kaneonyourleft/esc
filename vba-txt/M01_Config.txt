@@ -298,7 +298,7 @@ Public Const NG_FLAT        As String = "평탄도NG"
 Public Const NG_SUB         As String = "선가공"
 Public Const NG_SCRAP       As String = "폐기"
 Public Const NG_MAX_FLAT    As Long = 5
-Public Const NG_RESIST      As String = "����"   'NG_SCRAP ��Ī
+Public Const NG_RESIST      As String = "저항"   'NG 저항 분류
 Public Const MODE_NG        As String = "NG"
 
 Public Const PROD_COL_INSP_COUNT  As Long = 24   ' 평탄화 횟수
@@ -1766,6 +1766,7 @@ Public Function GetProcLogDates(sn As String, procName As String) As Variant
 ErrH:
     GetProcLogDates = Array("", "")
 End Function
+
 
 
 
