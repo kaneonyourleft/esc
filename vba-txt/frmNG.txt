@@ -1,19 +1,4 @@
-﻿VERSION 5.00
-Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmNG 
-   Caption         =   "NG 처리"
-   ClientHeight    =   6000
-   ClientLeft      =   108
-   ClientTop       =   456
-   ClientWidth     =   5400
-   OleObjectBlob   =   "frmNG.frx":0000
-   StartUpPosition =   1
-End
-Attribute VB_Name = "frmNG"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = False
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
-'================================================================
+﻿'================================================================
 ' frmNG v2.0 - NG 처리 UserForm
 ' ★ 페이지네이션 + 일괄입력 + 저항 추가
 '================================================================
@@ -33,15 +18,10 @@ Private mPage      As Long
 Private mTotalPages As Long
 
 Private WithEvents mBtnExec   As MSForms.CommandButton
-Attribute mBtnExec.VB_VarHelpID = -1
 Private WithEvents mBtnClose  As MSForms.CommandButton
-Attribute mBtnClose.VB_VarHelpID = -1
 Private WithEvents mBtnPrev   As MSForms.CommandButton
-Attribute mBtnPrev.VB_VarHelpID = -1
 Private WithEvents mBtnNext   As MSForms.CommandButton
-Attribute mBtnNext.VB_VarHelpID = -1
 Private WithEvents mBtnBulk   As MSForms.CommandButton
-Attribute mBtnBulk.VB_VarHelpID = -1
 
 Private mCboBulk   As MSForms.ComboBox
 Private mTxtBulk   As MSForms.TextBox
