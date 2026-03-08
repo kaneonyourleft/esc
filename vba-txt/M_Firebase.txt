@@ -1,4 +1,4 @@
-﻿Attribute VB_Name = "M_Firebase"
+Attribute VB_Name = "M_Firebase"
 Option Explicit
 ' ============================================================
 '  M_Firebase v12.4 ? ESC Production Management System
@@ -264,6 +264,31 @@ Private Function BuildFirebaseBody(wsProd As Worksheet, prdRow As Long, sn As St
     
     b = "{""fields"":{"
     
+    Dim pRootStatus As String
+    pRootStatus = SafeStr(wsProd.Cells(prdRow, PROD_COL_STATUS).Value)
+    
+    ' NG 발견 시 폐기 처리
+    Dim isScrap As Boolean: isScrap = False
+    If IsCacheReady() Then
+        Dim allProcsChk As Collection: Set allProcsChk = GetCachedAllProcs(sn)
+        Dim piChk As Long
+        For piChk = 1 To allProcsChk.count
+            If CStr(allProcsChk(piChk)("status")) = "NG" Then isScrap = True: Exit For
+        Next piChk
+    Else
+        Dim wsPlogChk As Worksheet: Set wsPlogChk = ThisWorkbook.sheets(SHT_PROCLOG)
+        Dim lrChk As Long: lrChk = GetLastRow(wsPlogChk, PLOG_COL_LOGID)
+        Dim rChk As Long
+        If lrChk >= PLOG_DATA_START Then
+            For rChk = PLOG_DATA_START To lrChk
+                If SafeStr(wsPlogChk.Cells(rChk, PLOG_COL_SN).Value) = sn Then
+                    If SafeStr(wsPlogChk.Cells(rChk, PLOG_COL_STATUS).Value) = "NG" Then isScrap = True: Exit For
+                End If
+            Next rChk
+        End If
+    End If
+    If isScrap Then pRootStatus = "폐기"
+
     ' ── Production 기본 필드 ──
     b = b & """batchId"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_BATCH).Value) & "},"
     b = b & """sn"":{" & FsString(sn) & "},"
@@ -276,7 +301,7 @@ Private Function BuildFirebaseBody(wsProd As Worksheet, prdRow As Long, sn As St
     b = b & """heatTreat"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_HEAT).Value) & "},"
     b = b & """equipment"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_EQUIP).Value) & "},"
     b = b & """currentProcess"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_PROCESS).Value) & "},"
-    b = b & """status"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_STATUS).Value) & "},"
+    b = b & """status"":{" & FsString(pRootStatus) & "},"
     b = b & """startDate"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_START).Value) & "},"
     b = b & """endDate"":{" & FsString(wsProd.Cells(prdRow, PROD_COL_END).Value) & "},"
     b = b & """progress"":{" & FsNumber(wsProd.Cells(prdRow, PROD_COL_PROGRESS).Value) & "},"
@@ -308,11 +333,14 @@ Private Function BuildFirebaseBody(wsProd As Worksheet, prdRow As Long, sn As St
             procCount = procCount + 1
             If procCount > 1 Then procMapBody = procMapBody & ","
             
+            Dim pStat1 As String: pStat1 = CStr(procInfo("status"))
+            If pStat1 = "NG" Then pStat1 = "폐기"
+            
             ' 공정 하나 = mapValue
             procMapBody = procMapBody & """" & pName & """:{""mapValue"":{""fields"":{"
             procMapBody = procMapBody & """order"":{" & FsNumber(procInfo("order")) & "},"
             procMapBody = procMapBody & """equip"":{" & FsString(procInfo("equip")) & "},"
-            procMapBody = procMapBody & """status"":{" & FsString(procInfo("status")) & "},"
+            procMapBody = procMapBody & """status"":{" & FsString(pStat1) & "},"
             procMapBody = procMapBody & """startDate"":{" & FsString(procInfo("startDate")) & "},"
             procMapBody = procMapBody & """planEnd"":{" & FsString(procInfo("planEnd")) & "},"
             procMapBody = procMapBody & """actualEnd"":{" & FsString(procInfo("actualEnd")) & "},"
@@ -338,10 +366,13 @@ NextBuildProc:
                     procCount = procCount + 1
                     If procCount > 1 Then procMapBody = procMapBody & ","
                     
+                    Dim pStat2 As String: pStat2 = SafeStr(wsPlog.Cells(pr, PLOG_COL_STATUS).Value)
+                    If pStat2 = "NG" Then pStat2 = "폐기"
+                    
                     procMapBody = procMapBody & """" & fbProcName & """:{""mapValue"":{""fields"":{"
                     procMapBody = procMapBody & """order"":{" & FsNumber(wsPlog.Cells(pr, PLOG_COL_ORDER).Value) & "},"
                     procMapBody = procMapBody & """equip"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_EQUIP).Value) & "},"
-                    procMapBody = procMapBody & """status"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_STATUS).Value) & "},"
+                    procMapBody = procMapBody & """status"":{" & FsString(pStat2) & "},"
                     procMapBody = procMapBody & """startDate"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_SDATE).Value) & "},"
                     procMapBody = procMapBody & """planEnd"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_PLANEND).Value) & "},"
                     procMapBody = procMapBody & """actualEnd"":{" & FsString(wsPlog.Cells(pr, PLOG_COL_ACTEND).Value) & "},"
