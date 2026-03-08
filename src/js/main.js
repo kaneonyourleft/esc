@@ -1,20 +1,19 @@
-﻿// ===================================================
+// ===================================================
 // ESC Manager v10.0 - main.js
 // ===================================================
 
 // === PWA 설정 ===
 const PWA_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#6366f1"/><text x="256" y="340" text-anchor="middle" font-family="Arial Black" font-size="220" fill="white" font-weight="900">ESC</text></svg>';
-const iconBlob = new Blob([PWA_ICON_SVG], { type: 'image/svg+xml' });
-const iconURL = URL.createObjectURL(iconBlob);
+const ICON_DATA_URI = 'data:image/svg+xml;base64,' + btoa(PWA_ICON_SVG);
 
 const manifestJSON = JSON.stringify({
   name: 'ESC Manager',
   short_name: 'ESC',
-  start_url: '/',
+  start_url: window.location.origin + window.location.pathname,
   display: 'standalone',
   background_color: '#0a0f1e',
   theme_color: '#6366f1',
-  icons: [{ src: iconURL, sizes: '512x512', type: 'image/svg+xml' }]
+  icons: [{ src: ICON_DATA_URI, sizes: '512x512', type: 'image/svg+xml' }]
 });
 
 const manifestLink = document.createElement('link');
@@ -22,11 +21,15 @@ manifestLink.rel = 'manifest';
 manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(manifestJSON);
 document.head.appendChild(manifestLink);
 
-// === 서비스 워커 ===
-const SW_CODE = "const CACHE='esc-v10';self.addEventListener('install',e=>{self.skipWaiting()});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))))});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)))});";
+// === 서비스 워커 정리 (blob SW 제거) ===
 if ('serviceWorker' in navigator) {
-  const swBlob = new Blob([SW_CODE], { type: 'application/javascript' });
-  navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => {
+      if (reg.active && reg.active.scriptURL.startsWith('blob:')) {
+        reg.unregister().then(() => console.log('🧹 stale blob SW unregistered'));
+      }
+    });
+  }).catch(() => {});
 }
 
 // === CDN 라이브러리 로드 ===
@@ -60,7 +63,7 @@ let firebaseApp, firebaseAuth, firebaseDb, FB = {};
 
 async function initFirebase() {
   const { initializeApp } = await import(FB_CDN + 'firebase-app.js');
-  const { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } = await import(FB_CDN + 'firebase-auth.js');
+  const { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } = await import(FB_CDN + 'firebase-auth.js');
   const { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, writeBatch, Timestamp, serverTimestamp } = await import(FB_CDN + 'firebase-firestore.js');
 
   firebaseApp = initializeApp(firebaseConfig);
@@ -70,7 +73,7 @@ async function initFirebase() {
   FB = {
     collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
     onSnapshot, query, orderBy, where, writeBatch, Timestamp, serverTimestamp,
-    GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+    GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
   };
 
   setupAuth();
@@ -462,17 +465,47 @@ function saveWidgets(list) {
 
 // === 인증 ===
 window.doLogin = async function() {
-  if (!firebaseAuth || !FB.GoogleAuthProvider) return toast('Firebase 초기화 중...', 'warn');
+  console.log('[doLogin] 호출됨');
+  if (!firebaseAuth || !FB.GoogleAuthProvider) {
+    console.warn('[doLogin] Firebase 아직 초기화 안됨', { firebaseAuth: !!firebaseAuth, provider: !!FB.GoogleAuthProvider });
+    return toast('Firebase 초기화 중...', 'warn');
+  }
   document.getElementById('loginSpinner').style.display = 'block';
   document.getElementById('loginError').style.display = 'none';
+  const provider = new FB.GoogleAuthProvider();
+  console.log('[doLogin] signInWithPopup 시도...');
   try {
-    await FB.signInWithPopup(firebaseAuth, new FB.GoogleAuthProvider());
+    const result = await FB.signInWithPopup(firebaseAuth, provider);
+    console.log('[doLogin] 로그인 성공:', result.user?.email);
   } catch (e) {
-    document.getElementById('loginError').textContent = e.message;
+    console.error('[doLogin] 에러:', e.code, e.message);
+    // 팝업 차단 시 리다이렉트 방식으로 폴백
+    if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+      console.warn('[doLogin] Popup blocked, falling back to redirect...');
+      try {
+        await FB.signInWithRedirect(firebaseAuth, provider);
+        return; // 리다이렉트 후 페이지 리로드됨
+      } catch (e2) {
+        document.getElementById('loginError').textContent = e2.message;
+      }
+    } else {
+      document.getElementById('loginError').textContent = e.message;
+    }
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('loginSpinner').style.display = 'none';
   }
 };
+
+// 로그인 버튼 이벤트 바인딩 (index.html의 #loginBtn에 onclick이 없으므로 여기서 연결)
+document.addEventListener('DOMContentLoaded', () => {
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => window.doLogin());
+    console.log('[Auth] loginBtn 이벤트 바인딩 완료');
+  } else {
+    console.warn('[Auth] loginBtn 요소를 찾을 수 없음');
+  }
+});
 
 window.doLogout = async function() {
   if (firebaseAuth) await FB.signOut(firebaseAuth);
@@ -480,6 +513,15 @@ window.doLogout = async function() {
 };
 
 function setupAuth() {
+  // 리다이렉트 로그인 결과 확인 (signInWithRedirect 폴백 시 필요)
+  if (FB.getRedirectResult) {
+    FB.getRedirectResult(firebaseAuth).catch(e => {
+      if (e.code && e.code !== 'auth/credential-already-in-use') {
+        console.warn('Redirect result error:', e.code);
+      }
+    });
+  }
+
   FB.onAuthStateChanged(firebaseAuth, (user) => {
     currentUser = user;
     if (user) {
@@ -2273,10 +2315,23 @@ window.openSidePanel = function(sn) {
     const st = p.status || '대기';
     const color = PROC_COLORS[proc] || '#666';
     const isCurrent = proc === (d.currentProcess || route[0]);
+
+    // 인라인 액션 버튼 결정
+    let actionBtn = '';
+    if (st === '진행') {
+      actionBtn = `<button onclick="event.stopPropagation();quickCompleteProc('${esc(sn)}','${esc(proc)}',${idx},${route.length})" style="padding:3px 10px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#10b981;color:#fff;font-weight:600;white-space:nowrap;transition:opacity 0.2s" onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">✓ 완료</button>`;
+    } else if (st === '대기') {
+      const prevAllDone = route.slice(0, idx).every(pp => (getProc(d, pp).status || '대기') === '완료');
+      const isFirstWaiting = idx === route.findIndex(pp => (getProc(d, pp).status || '대기') === '대기');
+      if (prevAllDone && isFirstWaiting) {
+        actionBtn = `<button onclick="event.stopPropagation();quickStartProc('${esc(sn)}','${esc(proc)}')" style="padding:3px 10px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#6366f1;color:#fff;font-weight:600;white-space:nowrap;transition:opacity 0.2s" onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">▶ 시작</button>`;
+      }
+    }
+
     html += `<div class="sp-proc-item" style="padding:8px 10px;margin-bottom:6px;border-radius:8px;border-left:3px solid ${color};background:${isCurrent ? 'rgba(99,102,241,0.08)' : 'var(--bg4)'}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-weight:600;font-size:13px;color:${color}">${idx + 1}. ${esc(proc)}</span>
-        ${statusBadge(st)}
+        <div style="display:flex;align-items:center;gap:6px">${statusBadge(st)}${actionBtn}</div>
       </div>
       <div style="font-size:11px;color:var(--t2);display:grid;grid-template-columns:1fr 1fr;gap:2px">
         <div>설비: ${esc(p.equip || '-')}</div>
@@ -2322,6 +2377,64 @@ window.applySpStatus = async function() {
     await FB.updateDoc(ref, updates);
     toast(`${selectedSN} 상태 → ${status}`, 'success');
   } catch (err) { handleFirestoreError(err, '상태 변경'); }
+};
+
+// === 인라인 공정 시작/완료 (사이드패널) ===
+window.quickStartProc = async function(sn, procName) {
+  const today = todayStr();
+  const updates = {};
+  updates[`processes.${procName}.status`] = '진행';
+  updates[`processes.${procName}.actualStart`] = today;
+  updates[`processes.${procName}.planStart`] = today;
+  updates.currentProcess = procName;
+  updates.status = '진행';
+  try {
+    const ref = FB.doc(firebaseDb, 'production', sn);
+    await FB.updateDoc(ref, updates);
+    toast(`${sn} ${procName} ▶ 시작`, 'success');
+    setTimeout(() => openSidePanel(sn), 300);
+  } catch (err) { handleFirestoreError(err, '공정 시작'); }
+};
+
+window.quickCompleteProc = async function(sn, procName, idx, totalProcs) {
+  const d = DATA[sn];
+  if (!d) return;
+  const route = getRoute(sn, d);
+  const proc = getProc(d, procName);
+  const today = todayStr();
+  const startDate = fD(proc.actualStart || proc.planStart);
+  const actualDays = startDate ? diffBD(startDate, today) : 0;
+  const isLast = (idx >= route.length - 1);
+  const updates = {};
+
+  // 현재 공정 완료 처리
+  updates[`processes.${procName}.status`] = '완료';
+  updates[`processes.${procName}.actualEnd`] = today;
+  updates[`processes.${procName}.actualDays`] = actualDays;
+
+  if (!isLast) {
+    // 다음 공정 자동 시작
+    const nextProc = route[idx + 1];
+    updates[`processes.${nextProc}.status`] = '진행';
+    updates[`processes.${nextProc}.actualStart`] = today;
+    if (!getProc(d, nextProc).planStart) updates[`processes.${nextProc}.planStart`] = today;
+    updates.currentProcess = nextProc;
+  } else {
+    // 마지막 공정 → LOT 전체 완료
+    updates.status = '완료';
+    updates.completedAt = today;
+    updates.currentProcess = procName;
+  }
+
+  try {
+    const ref = FB.doc(firebaseDb, 'production', sn);
+    await FB.updateDoc(ref, updates);
+    const msg = isLast
+      ? `${sn} ${procName} ✓ 완료 → 전체 완료!`
+      : `${sn} ${procName} ✓ 완료 → ${route[idx + 1]} 시작`;
+    toast(msg, 'success');
+    setTimeout(() => openSidePanel(sn), 300);
+  } catch (err) { handleFirestoreError(err, '공정 완료'); }
 };
 
 window.deleteSN = async function() {
