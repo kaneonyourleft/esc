@@ -1,6 +1,7 @@
 ﻿Attribute VB_Name = "M09_Inspection"
  '================================================================
-' M06_Inspection - NG 처리
+' M09_Inspection - NG 처리 v12.2
+' ★ 폐기 → 저항 변경, ProcessResistNG 추가
 '================================================================
 Option Explicit
 
@@ -30,7 +31,7 @@ Public Sub WriteProcLog(ws As Worksheet, r As Long, _
     
     If Len(remark) > 0 Then
         Dim wsPlog As Worksheet
-        Set wsPlog = ThisWorkbook.sheets(SHT_PROCLOG)
+        Set wsPlog = ThisWorkbook.Sheets(SHT_PROCLOG)
         Dim lr As Long
         lr = GetLastRow(wsPlog, PLOG_COL_LOGID)
         If lr >= PLOG_DATA_START Then
@@ -77,7 +78,19 @@ Public Sub ProcessSubNG(ws As Worksheet, r As Long, memo As String)
 End Sub
 
 '────────────────────────────────────────────────────────────────
-' 폐기
+' ★ 저항 NG (구 폐기 → 저항으로 변경)
+'────────────────────────────────────────────────────────────────
+Public Sub ProcessResistNG(ws As Worksheet, r As Long, memo As String)
+    Dim curProc As String
+    curProc = SafeStr(ws.Cells(r, PROD_COL_PROCESS).Value)
+    ws.Cells(r, PROD_COL_DEFECT).Value = "저항NG"
+    ws.Cells(r, PROD_COL_DEFPROC).Value = curProc
+    AppendMemo ws, r, "저항NG", memo
+    WriteProcLog ws, r, curProc, "저항NG", "", "저항NG " & memo
+End Sub
+
+'────────────────────────────────────────────────────────────────
+' 폐기 (수동폐기 별도 유지)
 '────────────────────────────────────────────────────────────────
 Public Sub ProcessScrapNG(ws As Worksheet, r As Long, memo As String)
     Dim curProc As String
@@ -102,4 +115,3 @@ Public Sub AppendMemo(ws As Worksheet, r As Long, tag As String, memo As String)
         ws.Cells(r, PROD_COL_INSP_MEMO).Value = nw
     End If
 End Sub
-

@@ -1,12 +1,12 @@
 ﻿VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmNG 
-   Caption         =   "UserForm1"
-   ClientHeight    =   3036
+   Caption         =   "NG 처리"
+   ClientHeight    =   6000
    ClientLeft      =   108
    ClientTop       =   456
-   ClientWidth     =   4584
+   ClientWidth     =   5400
    OleObjectBlob   =   "frmNG.frx":0000
-   StartUpPosition =   1  '소유자 가운데
+   StartUpPosition =   1
 End
 Attribute VB_Name = "frmNG"
 Attribute VB_GlobalNameSpace = False
@@ -14,71 +14,248 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 '================================================================
-' frmNG - NG 처리 UserForm
+' frmNG v2.0 - NG 처리 UserForm
+' ★ 페이지네이션 + 일괄입력 + 저항 추가
 '================================================================
 Option Explicit
 
-Private Const ROW_H     As Long = 28
-Private Const TOP_START As Long = 50
+Private Const ROW_H       As Long = 24
+Private Const TOP_START   As Long = 90
+Private Const PAGE_SIZE   As Long = 15
+Private Const FORM_W      As Long = 720
+Private Const FORM_H      As Long = 540
 
-Private mRows()  As Long
-Private mCount   As Long
-Private mCbos()  As MSForms.ComboBox
-Private mTxts()  As MSForms.TextBox
+Private mRows()    As Long
+Private mCount     As Long
+Private mCbos()    As MSForms.ComboBox
+Private mTxts()    As MSForms.TextBox
+Private mPage      As Long
+Private mTotalPages As Long
 
-Private WithEvents mBtnExec  As MSForms.CommandButton
+Private WithEvents mBtnExec   As MSForms.CommandButton
 Attribute mBtnExec.VB_VarHelpID = -1
-Private WithEvents mBtnClose As MSForms.CommandButton
+Private WithEvents mBtnClose  As MSForms.CommandButton
 Attribute mBtnClose.VB_VarHelpID = -1
+Private WithEvents mBtnPrev   As MSForms.CommandButton
+Attribute mBtnPrev.VB_VarHelpID = -1
+Private WithEvents mBtnNext   As MSForms.CommandButton
+Attribute mBtnNext.VB_VarHelpID = -1
+Private WithEvents mBtnBulk   As MSForms.CommandButton
+Attribute mBtnBulk.VB_VarHelpID = -1
+
+Private mCboBulk   As MSForms.ComboBox
+Private mTxtBulk   As MSForms.TextBox
+Private mLblPage   As MSForms.Label
+Private mLblCount  As MSForms.Label
 
 '────────────────────────────────────────────────────────────────
 Private Sub UserForm_Initialize()
     Me.Caption = "NG 처리"
-    Me.Width = 640
+    Me.Width = FORM_W
+    Me.Height = FORM_H
     Me.BackColor = RGB(30, 30, 30)
+    mPage = 1
     
     AddLabel "lblTitle", 14, 6, 200, 22, "NG 처리", 14, True, RGB(255, 80, 80)
-    AddLabel "lblDesc", 14, 28, 500, 14, _
-             "각 S/N별 NG분류 선택 + 메모 입력 후 [확인]", 8, False, CLR_TEXT_MID
     
-    AddLabel "hd0", 14, TOP_START - 16, 110, 14, "S/N", 8, True, CLR_TEXT_LIGHT
-    AddLabel "hd1", 128, TOP_START - 16, 110, 14, "제품", 8, True, CLR_TEXT_LIGHT
-    AddLabel "hd2", 242, TOP_START - 16, 70, 14, "공정", 8, True, CLR_TEXT_LIGHT
-    AddLabel "hd3", 316, TOP_START - 16, 100, 14, "NG 분류", 8, True, CLR_TEXT_LIGHT
-    AddLabel "hd4", 440, TOP_START - 16, 100, 14, "메모", 8, True, CLR_TEXT_LIGHT
+    '── 일괄 입력 영역 ──
+    AddLabel "lblBulkT", 14, 32, 80, 14, "일괄 분류:", 9, True, CLR_TEXT_LIGHT
+    
+    Set mCboBulk = Me.Controls.Add("Forms.ComboBox.1", "cboBulk")
+    With mCboBulk
+        .Left = 100: .Top = 30: .Width = 110: .Height = 20
+        .Font.Size = 9
+        .BackColor = RGB(45, 45, 45): .ForeColor = CLR_TEXT_WHITE
+        .Style = fmStyleDropDownList
+        .AddItem NG_FLAT
+        .AddItem NG_SUB
+        .AddItem NG_SCRAP
+    End With
+    
+    AddLabel "lblBulkM", 220, 32, 60, 14, "일괄 메모:", 9, True, CLR_TEXT_LIGHT
+    
+    Set mTxtBulk = Me.Controls.Add("Forms.TextBox.1", "txtBulk")
+    With mTxtBulk
+        .Left = 286: .Top = 30: .Width = 240: .Height = 20
+        .Font.Size = 9
+        .BackColor = RGB(45, 45, 45): .ForeColor = CLR_TEXT_WHITE
+    End With
+    
+    Set mBtnBulk = Me.Controls.Add("Forms.CommandButton.1", "btnBulk")
+    With mBtnBulk
+        .Caption = "전체 적용"
+        .Left = 536: .Top = 28: .Width = 80: .Height = 24
+        .Font.Size = 9: .Font.Bold = True
+        .BackColor = RGB(50, 50, 50): .ForeColor = CLR_CYAN
+    End With
+    
+    '── 카운트 표시 ──
+    Set mLblCount = Me.Controls.Add("Forms.Label.1", "lblCount")
+    With mLblCount
+        .Left = 14: .Top = 56: .Width = 400: .Height = 14
+        .Font.Size = 8: .ForeColor = CLR_TEXT_MID
+        .BackStyle = fmBackStyleTransparent
+    End With
+    
+    '── 컬럼 헤더 ──
+    AddLabel "hd0", 14, TOP_START - 18, 130, 14, "S/N", 8, True, CLR_TEXT_LIGHT
+    AddLabel "hd1", 148, TOP_START - 18, 90, 14, "제품", 8, True, CLR_TEXT_LIGHT
+    AddLabel "hd2", 242, TOP_START - 18, 60, 14, "공정", 8, True, CLR_TEXT_LIGHT
+    AddLabel "hd3", 308, TOP_START - 18, 110, 14, "NG 분류", 8, True, CLR_TEXT_LIGHT
+    AddLabel "hd4", 424, TOP_START - 18, 200, 14, "메모", 8, True, CLR_TEXT_LIGHT
 End Sub
 
 '────────────────────────────────────────────────────────────────
 Public Sub BuildUI()
     LoadFromTag
+    If mCount = 0 Then Exit Sub
     
+    mTotalPages = Int((mCount - 1) / PAGE_SIZE) + 1
+    mLblCount.Caption = "총 " & mCount & "건  |  " & mTotalPages & "페이지"
+    
+    ReDim mCbos(1 To mCount)
+    ReDim mTxts(1 To mCount)
+    
+    RenderPage
+    RenderButtons
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Private Sub RenderPage()
+    Dim ctl As MSForms.Control
+    Dim nm As String
+    Dim toDelete() As String
+    Dim delCnt As Long: delCnt = 0
+    
+    For Each ctl In Me.Controls
+        nm = ctl.Name
+        If Left(nm, 2) = "sn" Or Left(nm, 2) = "pd" Or Left(nm, 2) = "pc" Or _
+           Left(nm, 3) = "cbo" Or Left(nm, 3) = "txt" Then
+            If nm <> "cboBulk" And nm <> "txtBulk" Then
+                delCnt = delCnt + 1
+                ReDim Preserve toDelete(1 To delCnt)
+                toDelete(delCnt) = nm
+            End If
+        End If
+    Next ctl
+    
+    Dim di As Long
+    For di = 1 To delCnt
+        On Error Resume Next
+        Me.Controls.Remove toDelete(di)
+        On Error GoTo 0
+    Next di
+    
+    Dim startIdx As Long: startIdx = ((mPage - 1) * PAGE_SIZE) + 1
+    Dim endIdx As Long: endIdx = startIdx + PAGE_SIZE - 1
+    If endIdx > mCount Then endIdx = mCount
+    
+    Dim wsProd As Worksheet
+    Set wsProd = ThisWorkbook.Sheets(SHT_PRODUCTION)
+    
+    Dim i As Long, y As Long, rowNum As Long
+    rowNum = 0
+    
+    For i = startIdx To endIdx
+        y = TOP_START + (rowNum * ROW_H)
+        Dim r As Long: r = mRows(i)
+        
+        AddLabel "sn" & i, 14, y, 130, 18, _
+                 SafeStr(wsProd.Cells(r, PROD_COL_SN).Value), _
+                 8, True, CLR_TEXT_WHITE
+        
+        AddLabel "pd" & i, 148, y, 90, 18, _
+                 SafeStr(wsProd.Cells(r, PROD_COL_PRODUCT).Value), _
+                 8, False, CLR_TEXT_LIGHT
+        
+        AddLabel "pc" & i, 242, y, 60, 18, _
+                 SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value), _
+                 8, False, CLR_TEXT_LIGHT
+        
+        Set mCbos(i) = Me.Controls.Add("Forms.ComboBox.1", "cbo" & i)
+        With mCbos(i)
+            .Left = 308: .Top = y: .Width = 110: .Height = 20
+            .Font.Size = 9
+            .BackColor = RGB(45, 45, 45): .ForeColor = CLR_TEXT_WHITE
+            .Style = fmStyleDropDownList
+            .AddItem NG_FLAT
+            .AddItem NG_SUB
+            .AddItem NG_SCRAP
+        End With
+        
+        Set mTxts(i) = Me.Controls.Add("Forms.TextBox.1", "txt" & i)
+        With mTxts(i)
+            .Left = 424: .Top = y: .Width = 270: .Height = 20
+            .Font.Size = 9
+            .BackColor = RGB(45, 45, 45): .ForeColor = CLR_TEXT_WHITE
+        End With
+        
+        rowNum = rowNum + 1
+    Next i
+    
+    On Error Resume Next
+    If Not mLblPage Is Nothing Then
+        mLblPage.Caption = mPage & " / " & mTotalPages
+    End If
+    If Not mBtnPrev Is Nothing Then mBtnPrev.Enabled = (mPage > 1)
+    If Not mBtnNext Is Nothing Then mBtnNext.Enabled = (mPage < mTotalPages)
+    On Error GoTo 0
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Private Sub RenderButtons()
     Dim btnY As Long
-    btnY = TOP_START + (mCount * ROW_H) + 14
-    If btnY < 160 Then btnY = 160
+    btnY = FORM_H - 70
+    
+    Set mBtnPrev = Me.Controls.Add("Forms.CommandButton.1", "btnPrev")
+    With mBtnPrev
+        .Caption = "< 이전"
+        .Left = 14: .Top = btnY: .Width = 70: .Height = 28
+        .Font.Size = 9
+        .BackColor = RGB(50, 50, 50): .ForeColor = CLR_TEXT_LIGHT
+        .Enabled = False
+    End With
+    
+    Set mLblPage = Me.Controls.Add("Forms.Label.1", "lblPage")
+    With mLblPage
+        .Left = 90: .Top = btnY + 6: .Width = 80: .Height = 16
+        .Caption = "1 / " & mTotalPages
+        .Font.Size = 10: .Font.Bold = True
+        .ForeColor = CLR_TEXT_WHITE
+        .BackStyle = fmBackStyleTransparent
+        .TextAlign = fmTextAlignCenter
+    End With
+    
+    Set mBtnNext = Me.Controls.Add("Forms.CommandButton.1", "btnNext")
+    With mBtnNext
+        .Caption = "다음 >"
+        .Left = 176: .Top = btnY: .Width = 70: .Height = 28
+        .Font.Size = 9
+        .BackColor = RGB(50, 50, 50): .ForeColor = CLR_TEXT_LIGHT
+        .Enabled = (mTotalPages > 1)
+    End With
     
     Set mBtnExec = Me.Controls.Add("Forms.CommandButton.1", "btnExecute")
     With mBtnExec
-        .Caption = "확인"
-        .Left = 14: .Top = btnY: .Width = 90: .Height = 30
-        .Font.Size = 11: .Font.Bold = True
+        .Caption = "확인 (" & mCount & "건)"
+        .Left = FORM_W - 280: .Top = btnY: .Width = 120: .Height = 32
+        .Font.Size = 12: .Font.Bold = True
         .BackColor = RGB(50, 50, 50): .ForeColor = RGB(255, 80, 80)
     End With
     
     Set mBtnClose = Me.Controls.Add("Forms.CommandButton.1", "btnClose")
     With mBtnClose
         .Caption = "닫기"
-        .Left = 530: .Top = btnY: .Width = 80: .Height = 30
+        .Left = FORM_W - 150: .Top = btnY: .Width = 80: .Height = 32
         .Font.Size = 10
         .BackColor = RGB(50, 50, 50): .ForeColor = CLR_TEXT_LIGHT
     End With
-    
-    Me.Height = btnY + 72
 End Sub
 
 '────────────────────────────────────────────────────────────────
 Private Sub LoadFromTag()
     Dim raw As String
-    raw = Me.tag
+    raw = Me.Tag
     
     If Len(raw) = 0 Then
         mCount = 0
@@ -91,48 +268,55 @@ Private Sub LoadFromTag()
     parts = Split(raw, "|")
     mCount = UBound(parts) + 1
     ReDim mRows(1 To mCount)
-    ReDim mCbos(1 To mCount)
-    ReDim mTxts(1 To mCount)
-    
-    Dim wsProd As Worksheet
-    Set wsProd = ThisWorkbook.sheets(SHT_PRODUCTION)
     
     Dim i As Long
     For i = 1 To mCount
         mRows(i) = CLng(parts(i - 1))
-        Dim r As Long: r = mRows(i)
-        Dim y As Long: y = TOP_START + ((i - 1) * ROW_H)
-        
-        AddLabel "sn" & i, 14, y, 110, 18, _
-                 SafeStr(wsProd.Cells(r, PROD_COL_SN).Value), _
-                 9, True, CLR_TEXT_WHITE
-        
-        AddLabel "pd" & i, 128, y, 110, 18, _
-                 SafeStr(wsProd.Cells(r, PROD_COL_PRODUCT).Value), _
-                 9, False, CLR_TEXT_LIGHT
-        
-        AddLabel "pc" & i, 242, y, 70, 18, _
-                 SafeStr(wsProd.Cells(r, PROD_COL_PROCESS).Value), _
-                 9, False, CLR_TEXT_LIGHT
-        
-        Set mCbos(i) = Me.Controls.Add("Forms.ComboBox.1", "cbo" & i)
-        With mCbos(i)
-            .Left = 316: .Top = y: .Width = 118: .Height = 20
-            .Font.Size = 9
-            .BackColor = RGB(45, 45, 45): .ForeColor = CLR_TEXT_WHITE
-            .Style = fmStyleDropDownList
-            .AddItem NG_FLAT
-            .AddItem NG_SUB
-            .AddItem NG_SCRAP
-        End With
-        
-        Set mTxts(i) = Me.Controls.Add("Forms.TextBox.1", "txt" & i)
-        With mTxts(i)
-            .Left = 440: .Top = y: .Width = 170: .Height = 20
-            .Font.Size = 9
-            .BackColor = RGB(45, 45, 45): .ForeColor = CLR_TEXT_WHITE
-        End With
     Next i
+End Sub
+
+'────────────────────────────────────────────────────────────────
+' ★ 일괄 적용
+'────────────────────────────────────────────────────────────────
+Private Sub mBtnBulk_Click()
+    If Len(mCboBulk.Value) = 0 Then
+        MsgBox "일괄 적용할 NG 분류를 선택하세요.", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim bulkType As String: bulkType = mCboBulk.Value
+    Dim bulkMemo As String: bulkMemo = Trim(mTxtBulk.Text)
+    
+    If MsgBox("전체 " & mCount & "건에 [" & bulkType & "]을 일괄 적용합니다." & vbCrLf & _
+              "계속하시겠습니까?", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+    
+    Dim i As Long
+    For i = 1 To mCount
+        On Error Resume Next
+        If Not mCbos(i) Is Nothing Then mCbos(i).Value = bulkType
+        If Not mTxts(i) Is Nothing Then
+            If Len(bulkMemo) > 0 Then mTxts(i).Text = bulkMemo
+        End If
+        On Error GoTo 0
+    Next i
+    
+    MsgBox mCount & "건 일괄 적용 완료. [확인] 버튼으로 최종 처리하세요.", vbInformation
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Private Sub mBtnPrev_Click()
+    If mPage > 1 Then
+        mPage = mPage - 1
+        RenderPage
+    End If
+End Sub
+
+'────────────────────────────────────────────────────────────────
+Private Sub mBtnNext_Click()
+    If mPage < mTotalPages Then
+        mPage = mPage + 1
+        RenderPage
+    End If
 End Sub
 
 '────────────────────────────────────────────────────────────────
@@ -140,7 +324,11 @@ Private Sub mBtnExec_Click()
     Dim cnt As Long, i As Long
     cnt = 0
     For i = 1 To mCount
-        If Len(mCbos(i).Value) > 0 Then cnt = cnt + 1
+        On Error Resume Next
+        If Not mCbos(i) Is Nothing Then
+            If Len(mCbos(i).Value) > 0 Then cnt = cnt + 1
+        End If
+        On Error GoTo 0
     Next i
     
     If cnt = 0 Then
@@ -156,28 +344,32 @@ Private Sub mBtnExec_Click()
     DisableEvents
     
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.sheets(SHT_PRODUCTION)
+    Set ws = ThisWorkbook.Sheets(SHT_PRODUCTION)
     
-    Dim fCnt As Long, sCnt As Long, xCnt As Long
-    fCnt = 0: sCnt = 0: xCnt = 0
+    Dim fCnt As Long, sCnt As Long, rCnt As Long
+    fCnt = 0: sCnt = 0: rCnt = 0
     
     For i = 1 To mCount
-        If Len(mCbos(i).Value) > 0 Then
-            Dim memo As String
-            memo = Trim(mTxts(i).text)
-            
-            Select Case mCbos(i).Value
-                Case NG_FLAT
-                    ProcessFlatNG ws, mRows(i), memo
-                    fCnt = fCnt + 1
-                Case NG_SUB
-                    ProcessSubNG ws, mRows(i), memo
-                    sCnt = sCnt + 1
-                Case NG_SCRAP
-                    ProcessScrapNG ws, mRows(i), memo
-                    xCnt = xCnt + 1
-            End Select
+        On Error Resume Next
+        If Not mCbos(i) Is Nothing Then
+            If Len(mCbos(i).Value) > 0 Then
+                Dim memo As String: memo = ""
+                If Not mTxts(i) Is Nothing Then memo = Trim(mTxts(i).Text)
+                
+                Select Case mCbos(i).Value
+                    Case NG_FLAT
+                        ProcessFlatNG ws, mRows(i), memo
+                        fCnt = fCnt + 1
+                    Case NG_SUB
+                        ProcessSubNG ws, mRows(i), memo
+                        sCnt = sCnt + 1
+                    Case NG_SCRAP
+                        ProcessResistNG ws, mRows(i), memo
+                        rCnt = rCnt + 1
+                End Select
+            End If
         End If
+        On Error GoTo 0
     Next i
     
     EnableEvents
@@ -187,7 +379,7 @@ Private Sub mBtnExec_Click()
     msg = "처리 완료:" & vbCrLf
     If fCnt > 0 Then msg = msg & "  평탄도NG: " & fCnt & "건" & vbCrLf
     If sCnt > 0 Then msg = msg & "  선가공: " & sCnt & "건" & vbCrLf
-    If xCnt > 0 Then msg = msg & "  폐기: " & xCnt & "건" & vbCrLf
+    If rCnt > 0 Then msg = msg & "  저항NG: " & rCnt & "건" & vbCrLf
     MsgBox msg, vbInformation
     
     Unload Me
@@ -211,4 +403,3 @@ Private Sub AddLabel(nm As String, l As Long, t As Long, w As Long, h As Long, _
         .BackStyle = fmBackStyleTransparent
     End With
 End Sub
-
