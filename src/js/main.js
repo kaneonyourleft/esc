@@ -1235,6 +1235,85 @@ window.applyNG = async function() {
   } catch (err) { handleFirestoreError(err, 'NG 처리'); }
 };
 
+window.applyBatchStart = async function() {
+  if (!wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
+  const today = todayStr();
+  let count = 0;
+  try {
+    const batch = FB.writeBatch(firebaseDb);
+    wsSelection.forEach(sn => {
+      const d = DATA[sn];
+      if (!d) return;
+      const procName = d.currentProcess || getRoute(sn, d)[0];
+      const proc = getProc(d, procName);
+      // '대기' 상태인 현재 공정을 '진행'으로 변경
+      if ((proc.status || '대기') === '대기') {
+        const ref = FB.doc(firebaseDb, 'production', sn);
+        const updates = {};
+        updates[`processes.${procName}.status`] = '진행';
+        updates[`processes.${procName}.actualStart`] = today;
+        updates[`processes.${procName}.planStart`] = today;
+        updates.currentProcess = procName;
+        updates.status = '진행';
+        batch.update(ref, updates);
+        count++;
+      }
+    });
+    if (count === 0) { toast('시작할 수 있는 대기 상태의 S/N이 없습니다', 'info'); return; }
+    await batch.commit();
+    toast(`${count}건 일괄 시작 처리 완료`, 'success');
+    wsSelection.clear();
+  } catch (err) { handleFirestoreError(err, '일괄 시작 처리'); }
+};
+
+window.applyBatchComplete = async function() {
+  if (!wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
+  const today = todayStr();
+  let count = 0;
+  try {
+    const batch = FB.writeBatch(firebaseDb);
+    wsSelection.forEach(sn => {
+      const d = DATA[sn];
+      if (!d) return;
+      const route = getRoute(sn, d);
+      const procName = d.currentProcess || route[0];
+      const proc = getProc(d, procName);
+      
+      // '진행' 상태인 공정만 완료 가능
+      if (proc.status === '진행') {
+        const idx = route.indexOf(procName);
+        const startDate = fD(proc.actualStart || proc.planStart);
+        const actualDays = startDate ? diffBD(startDate, today) : 0;
+        const isLast = (idx >= route.length - 1);
+        const ref = FB.doc(firebaseDb, 'production', sn);
+        const updates = {};
+        
+        updates[`processes.${procName}.status`] = '완료';
+        updates[`processes.${procName}.actualEnd`] = today;
+        updates[`processes.${procName}.actualDays`] = actualDays;
+        
+        if (!isLast) {
+          const nextProc = route[idx + 1];
+          updates[`processes.${nextProc}.status`] = '진행';
+          updates[`processes.${nextProc}.actualStart`] = today;
+          if (!getProc(d, nextProc).planStart) updates[`processes.${nextProc}.planStart`] = today;
+          updates.currentProcess = nextProc;
+        } else {
+          updates.status = '완료';
+          updates.completedAt = today;
+          updates.currentProcess = procName;
+        }
+        batch.update(ref, updates);
+        count++;
+      }
+    });
+    if (count === 0) { toast('완료할 수 있는 진행 상태의 S/N이 없습니다', 'info'); return; }
+    await batch.commit();
+    toast(`${count}건 일괄 완료 처리 완료`, 'success');
+    wsSelection.clear();
+  } catch (err) { handleFirestoreError(err, '일괄 완료 처리'); }
+};
+
 window.generateBatchQR = async function() {
   if (!wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
   const grid = document.getElementById('qrPrintGrid');
