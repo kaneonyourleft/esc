@@ -50,6 +50,7 @@ Private Sub UserForm_Initialize()
         .AddItem NG_FLAT
         .AddItem NG_SUB
         .AddItem NG_SCRAP
+            .AddItem NG_RESIST
     End With
     
     AddLabel "lblBulkM", 220, 32, 60, 14, "일괄 메모:", 9, True, CLR_TEXT_LIGHT
@@ -161,6 +162,7 @@ Private Sub RenderPage()
             .AddItem NG_FLAT
             .AddItem NG_SUB
             .AddItem NG_SCRAP
+            .AddItem NG_RESIST
         End With
         
         Set mTxts(i) = Me.Controls.Add("Forms.TextBox.1", "txt" & i)
