@@ -1,8 +1,8 @@
-﻿import{initializeApp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import{getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import{getFirestore,collection,doc,setDoc,addDoc,getDoc,getDocs,query,orderBy,limit,where,onSnapshot,writeBatch,updateDoc,deleteDoc,serverTimestamp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import*as S from'./state.js';
-import{fD,toast,getWidgetConfig}from'./utils.js';
+import{fD,toast,getWidgetConfig,getSNCode}from'./utils.js';
 
 const FC={apiKey:'AIzaSyAwDS2PigihTH6RKMxzrH-utlaKJbtHBTY',authDomain:'esc-production-management.firebaseapp.com',projectId:'esc-production-management',storageBucket:'esc-production-management.firebasestorage.app',messagingSenderId:'622370430583',appId:'1:622370430583:web:363b6e2f185fddcbd33072'};
 const app=initializeApp(FC);
@@ -39,8 +39,9 @@ toast('데이터 새로고침 완료','ok');onDataUpdate();
 
 export async function getMaxSeqFromFirestore(cat,prodName,sheetNo){
 let maxLocal=0;
-S.D.forEach(d=>{const sn=(d.sn||'').toUpperCase();if(sheetNo){if(sn.startsWith(`${cat}${sheetNo}-${prodName}-L`.toUpperCase())){const match=sn.match(/-L(\d{3})$/);if(match){const num=parseInt(match[1],10);if(num>maxLocal)maxLocal=num;}}}else{if(sn.includes(`-${prodName.toUpperCase()}-L`)){const match=sn.match(/-L(\d{3})$/);if(match){const num=parseInt(match[1],10);if(num>maxLocal)maxLocal=num;}}}});
+const snCode=getSNCode(cat,prodName);
+S.D.forEach(d=>{const sn=(d.sn||'').toUpperCase();if(sheetNo){if(sn.startsWith(`${cat}${sheetNo}-${snCode}-L`)){const match=sn.match(/-L(\d{3})$/);if(match){const num=parseInt(match[1],10);if(num>maxLocal)maxLocal=num;}}}else{if(sn.includes(`-${snCode}-L`)){const match=sn.match(/-L(\d{3})$/);if(match){const num=parseInt(match[1],10);if(num>maxLocal)maxLocal=num;}}}});
 let maxRemote=0;
-try{const snap=await getDocs(collection(db,'production'));snap.forEach(docSnap=>{const sn=(docSnap.data().sn||'').toUpperCase();const targetProd=prodName.toUpperCase();if(sn.includes(`-${targetProd}-L`)){if(sheetNo){if(!sn.startsWith(`${cat}${sheetNo}`.toUpperCase()))return;}const match=sn.match(/-L(\d{3})$/);if(match){const num=parseInt(match[1],10);if(num>maxRemote)maxRemote=num;}}});}catch(e){}
+try{const snap=await getDocs(collection(db,'production'));snap.forEach(docSnap=>{const sn=(docSnap.data().sn||'').toUpperCase();if(sn.includes(`-${snCode}-L`)){if(sheetNo){if(!sn.startsWith(`${cat}${sheetNo}`))return;}const match=sn.match(/-L(\d{3})$/);if(match){const num=parseInt(match[1],10);if(num>maxRemote)maxRemote=num;}}});}catch(e){}
 return Math.max(maxLocal,maxRemote);
 }

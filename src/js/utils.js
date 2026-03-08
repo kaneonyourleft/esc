@@ -1,4 +1,4 @@
-﻿import{PROC_COLORS}from'./constants.js';
+import{PROC_COLORS}from'./constants.js';
 import{DEFAULT_WIDGETS}from'./constants.js';
 
 export function fD(d){if(!d)return'';const dt=d instanceof Date?d:new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
@@ -18,3 +18,4 @@ export function closeModal(id){document.getElementById(id).classList.add('hidden
 export function openModal(id){document.getElementById(id).classList.remove('hidden')}
 export function mdToHtml(text){if(!text)return'';let html=text;html=html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');html=html.replace(/`([^`]+)`/g,'<code style="background:var(--bg4);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>');html=html.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/g,function(match,headerRow,bodyRows){const headers=headerRow.split('|').map(h=>h.trim()).filter(Boolean);let table='<table style="font-size:11px;margin:6px 0;border:1px solid var(--border);border-radius:4px"><thead><tr>'+headers.map(h=>'<th style="padding:4px 6px">'+h+'</th>').join('')+'</tr></thead><tbody>';bodyRows.trim().split('\n').forEach(row=>{const cells=row.split('|').map(c=>c.trim()).filter(Boolean);table+='<tr>'+cells.map(c=>'<td style="padding:3px 6px;border-top:1px solid var(--border)">'+c+'</td>').join('')+'</tr>';});table+='</tbody></table>';return table;});html=html.replace(/^[\-\*] (.+)$/gm,'<li style="margin-left:16px;font-size:12px">$1</li>');html=html.replace(/(<li[^>]*>.*<\/li>\n?)+/g,function(m){return'<ul style="list-style:disc;padding-left:10px;margin:4px 0">'+m+'</ul>';});html=html.replace(/^\d+\. (.+)$/gm,'<li style="margin-left:16px;font-size:12px">$1</li>');html=html.replace(/\n/g,'<br>');return html}
 export function getWidgetConfig(){try{const c=JSON.parse(localStorage.getItem('esc_widget_config'));if(c&&c.length)return c;}catch(e){}return JSON.parse(JSON.stringify(DEFAULT_WIDGETS))}
+export function getSNCode(cat,prodId){if(!prodId)return'';let s=String(prodId).replace(/\\s+/g,'').toUpperCase();const c=String(cat).toUpperCase();if(s.length>c.length&&s.startsWith(c))s=s.substring(c.length);return s;}

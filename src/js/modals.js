@@ -1,6 +1,6 @@
-﻿import*as S from'./state.js';
+import*as S from'./state.js';
 import{PROC_COLORS,EQ_MAP}from'./constants.js';
-import{fD,buildRoute,procDays,addBD,toast,openModal,closeModal,calcProgress,getDplus}from'./utils.js';
+import{fD,buildRoute,procDays,addBD,toast,openModal,closeModal,calcProgress,getDplus,getSNCode}from'./utils.js';
 import{db,doc,setDoc,addDoc,getDocs,collection,writeBatch,serverTimestamp,getMaxSeqFromFirestore}from'./firebase.js';
 
 export function openProductModal(){document.getElementById('pm_name').value='';document.getElementById('pm_cat').value='WN';document.getElementById('pm_drawing').value='';document.getElementById('pm_shrink').value='';document.getElementById('pm_stack').value='';document.getElementById('pm_joint').value='Brazing';document.getElementById('pm_heat').value='N';updatePMRoute();openModal('productModal');['pm_cat','pm_joint','pm_heat'].forEach(id=>document.getElementById(id).addEventListener('change',updatePMRoute));}
@@ -11,24 +11,27 @@ export function openSNModal(){const today=fD(new Date());document.getElementById
 
 export function autoBatchCode(){const today=fD(new Date()).replace(/-/g,'');const existing=S.D.filter(d=>d.batchId&&d.batchId.startsWith(today)).map(d=>parseInt(d.batchId.split('-')[1]||0));const next=existing.length?Math.max(...existing)+1:1;document.getElementById('sn_batch').value=`${today}-${String(next).padStart(3,'0')}`;updateSNPreview();}
 
-export async function onSNProdChange(){const prodId=document.getElementById('sn_prod').value;if(!prodId)return;const prod=S.PRODS.find(p=>p.id===prodId);if(!prod)return;const cat=prod.category||'WN';const eqs=EQ_MAP['탈지'][cat]||[];document.getElementById('sn_equip').innerHTML=eqs.map(e=>`<option>${e}</option>`).join('');const sheetNo=document.getElementById('sn_sheet').value.trim();const maxSeq=await getMaxSeqFromFirestore(cat,prodId,sheetNo);let nextSeq,hintText;if(maxSeq>=999){nextSeq=1;hintText='⚠️ L999 도달';}else if(maxSeq>0){nextSeq=maxSeq+1;hintText=`현재 최대: L${String(maxSeq).padStart(3,'0')} → 다음: L${String(maxSeq+1).padStart(3,'0')}`;}else{nextSeq=1;hintText='신규 제품';}document.getElementById('sn_seq').value=nextSeq;document.getElementById('sn_seqHint').textContent=hintText;updateSNPreview();checkEquipConflict();}
+export async function onSNProdChange(){const prodId=document.getElementById('sn_prod').value;if(!prodId)return;const prod=S.PRODS.find(p=>p.id===prodId);if(!prod)return;const cat=prod.category||'WN';const eqs=EQ_MAP['탈지'][cat]||[];document.getElementById('sn_equip').innerHTML=eqs.map(e=>`<option>${e}</option>`).join('');const maxSeq=await getMaxSeqFromFirestore(cat,prodId,null);let nextSeq,hintText;if(maxSeq>=999){nextSeq=1;hintText='⚠️ L999 도달';}else if(maxSeq>0){nextSeq=maxSeq+1;hintText=`현재 최대: L${String(maxSeq).padStart(3,'0')} → 다음: L${String(maxSeq+1).padStart(3,'0')}`;}else{nextSeq=1;hintText='신규 제품';}document.getElementById('sn_seq').value=nextSeq;document.getElementById('sn_seqHint').textContent=hintText;updateSNPreview();checkEquipConflict();}
 
-export async function onSheetNoChange(){const prodId=document.getElementById('sn_prod').value;if(!prodId){updateSNPreview();return;}const prod=S.PRODS.find(p=>p.id===prodId);if(!prod){updateSNPreview();return;}const cat=prod.category||'WN';const sheetNo=document.getElementById('sn_sheet').value.trim();if(sheetNo.length<6){updateSNPreview();return;}const maxSeq=await getMaxSeqFromFirestore(cat,prodId,sheetNo);let nextSeq,hintText;if(maxSeq>=999){nextSeq=1;hintText='⚠️ L999 도달';}else if(maxSeq>0){nextSeq=maxSeq+1;hintText=`현재 최대: L${String(maxSeq).padStart(3,'0')} → 다음: L${String(maxSeq+1).padStart(3,'0')}`;}else{nextSeq=1;hintText='신규 시트번호';}document.getElementById('sn_seq').value=nextSeq;document.getElementById('sn_seqHint').textContent=hintText;updateSNPreview();}
+export async function onSheetNoChange(){updateSNPreview();}
 
-export function updateSNPreview(){const prod=document.getElementById('sn_prod').value;const sheet=document.getElementById('sn_sheet').value||'??????';const qty=parseInt(document.getElementById('sn_qty').value)||1;const seq=parseInt(document.getElementById('sn_seq').value)||1;const cat=S.PRODS.find(p=>p.id===prod)?.category||'??';let html='';for(let i=0;i<Math.min(qty,10);i++){const seqNum=((seq+i-1)%999)+1;html+=`<div>${cat}${sheet}-${prod||'???'}-L${String(seqNum).padStart(3,'0')}</div>`;}if(qty>10)html+=`<div style="color:var(--t2)">... 외 ${qty-10}건</div>`;document.getElementById('sn_preview').innerHTML=html||'미리보기 없음';}
+export function updateSNPreview(){const prod=document.getElementById('sn_prod').value;const startDate=document.getElementById('sn_start')?.value||fD(new Date());const sheet=startDate.replace(/-/g,'').slice(2);const qty=parseInt(document.getElementById('sn_qty').value)||1;const seq=parseInt(document.getElementById('sn_seq').value)||1;const cat=S.PRODS.find(p=>p.id===prod)?.category||'??';const snCode=getSNCode(cat,prod)||'???';let html='';for(let i=0;i<Math.min(qty,10);i++){const seqNum=((seq+i-1)%999)+1;html+=`<div>${cat}${sheet}-${snCode}-L${String(seqNum).padStart(3,'0')}</div>`;}if(qty>10)html+=`<div style="color:var(--t2)">... 외 ${qty-10}건</div>`;document.getElementById('sn_preview').innerHTML=html||'미리보기 없음';}
 
 export function checkEquipConflict(){const warnEl=document.getElementById('equipConflictWarn');warnEl.innerHTML='';const equip=document.getElementById('sn_equip').value;const startDate=document.getElementById('sn_start').value;const prodId=document.getElementById('sn_prod').value;if(!equip||!startDate||!prodId)return;const conflicts=S.D.filter(item=>{const p=(item.processes||{})['탈지'];if(!p)return false;if(p.equip!==equip)return false;if(p.status==='완료'||p.status==='폐기')return false;if(p.startDate&&p.planEnd)return p.startDate<=startDate&&p.planEnd>=startDate;return p.startDate===startDate;});if(conflicts.length>0){warnEl.innerHTML=`<div class="equip-conflict-warn">⚠️ 탈지 ${equip}에 이미 ${conflicts.length}건 배정됨: ${conflicts.slice(0,5).map(c=>c.sn).join(', ')}</div>`;}}
 
 export async function saveSNBatch(options){
-let batchId,sheetNo,prodId,equip,qty,startDate,seq;
-if(options){batchId=options.batchId;sheetNo=options.sheetNo||'';prodId=options.product;equip=options.equipment||'';qty=options.quantity||1;startDate=options.startDate;seq=options.seq||1;}
-else{batchId=document.getElementById('sn_batch').value.trim();sheetNo=document.getElementById('sn_sheet').value.trim();prodId=document.getElementById('sn_prod').value;equip=document.getElementById('sn_equip').value;qty=parseInt(document.getElementById('sn_qty').value)||1;startDate=document.getElementById('sn_start').value;seq=parseInt(document.getElementById('sn_seq').value)||1;}
+let batchId,prodId,equip,qty,startDate;
+if(options){batchId=options.batchId;prodId=options.product;equip=options.equipment||'';qty=options.quantity||1;startDate=options.startDate;}
+else{batchId=document.getElementById('sn_batch').value.trim();prodId=document.getElementById('sn_prod').value;equip=document.getElementById('sn_equip').value;qty=parseInt(document.getElementById('sn_qty').value)||1;startDate=document.getElementById('sn_start').value;}
 if(!batchId||!prodId||!startDate){toast('필수 항목을 입력하세요','err');return;}
 const prod=S.PRODS.find(p=>p.id===prodId);if(!prod){toast('제품을 찾을 수 없습니다','err');return;}
 const cat=prod.category;const stack=prod.stackCount||0;const joint=prod.dcJoint||'Brazing';const heat=prod.heatTreat||'N';const routeStr=prod.route||buildRoute(cat,joint,heat);const routeArr=routeStr.split('→').filter(Boolean);
-if(!sheetNo)sheetNo=fD(new Date()).replace(/-/g,'').slice(2);
+const sheetNo=startDate.replace(/-/g,'').slice(2);
+const maxSeq=await getMaxSeqFromFirestore(cat,prodId,null);
+const currentSeq=(maxSeq>=999)?1:maxSeq+1;
+const snCode=getSNCode(cat,prodId);
 const batch=writeBatch(db);
-for(let i=0;i<qty;i++){const seqNum=((seq+i-1)%999)+1;const sn=`${cat}${sheetNo}-${prodId}-L${String(seqNum).padStart(3,'0')}`;const processes={};let cumDays=0;
+for(let i=0;i<qty;i++){const seqNum=((currentSeq+i-1)%999)+1;const sn=`${cat}${sheetNo}-${snCode}-L${String(seqNum).padStart(3,'0')}`;const processes={};let cumDays=0;
 for(let j=0;j<routeArr.length;j++){const pn=routeArr[j];const days=procDays(pn,cat,stack);const pStart=addBD(new Date(startDate),cumDays);const pEnd=addBD(new Date(pStart),days);processes[pn]={order:j+1,equip:j===0?equip:'',status:'대기',startDate:fD(pStart),planEnd:fD(pEnd),actualEnd:'',planDays:days,actualDays:0,defect:'',remark:''};cumDays+=days;}
 const endDate=fD(addBD(new Date(startDate),routeArr.reduce((s,p)=>s+procDays(p,cat,stack),0)));
 batch.set(doc(db,'production',sn),{batchId,sn,category:cat,productName:prodId,drawingNo:prod.drawingNo||'',shrinkage:prod.shrinkage||0,stackCount:stack,dcJoint:joint,heatTreat:heat,equipment:equip,currentProcess:routeArr[0]||'',status:'대기',startDate,endDate,progress:0,route:routeStr,sheetNo,registeredAt:fD(new Date()),defectType:'',processes});}

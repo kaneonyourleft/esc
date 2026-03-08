@@ -2860,6 +2860,32 @@ window.autoBatchCode = function() {
   updateSNPreview();
 };
 
+function getSNCodeLocal(cat, prodId) {
+  if (!prodId) return '';
+  let s = String(prodId).replace(/\s+/g, '').toUpperCase();
+  const c = String(cat).toUpperCase();
+  if (s.length > c.length && s.startsWith(c)) {
+    s = s.substring(c.length);
+  }
+  return s;
+}
+
+function getMaxSeqLocal(cat, prodId) {
+  let maxLocal = 0;
+  const snCode = getSNCodeLocal(cat, prodId);
+  Object.keys(DATA).forEach(sn => {
+    sn = sn.toUpperCase();
+    if (sn.includes(`-${snCode}-L`)) {
+      const match = sn.match(/-L(\d{3})$/);
+      if (match) {
+        const num = Math.max(maxLocal, parseInt(match[1], 10));
+        maxLocal = num;
+      }
+    }
+  });
+  return maxLocal;
+}
+
 window.onSNProdChange = function() {
   const prodId = document.getElementById('sn_prod').value;
   const prod = PRODUCTS[prodId];
@@ -2871,33 +2897,42 @@ window.onSNProdChange = function() {
     const eqList = getEquipList(firstProc, cat);
     equipSel.innerHTML = '<option value="">선택...</option>' + eqList.map(eq => `<option value="${esc(eq)}">${esc(eq)}</option>`).join('');
   }
+  
+  const maxSeq = getMaxSeqLocal(cat, prodId);
+  let nextSeq = (maxSeq >= 999) ? 1 : maxSeq + 1;
+  let hintText = (maxSeq >= 999) ? '⚠️ L999 도달' : (maxSeq > 0 ? `현재 최대: L${String(maxSeq).padStart(3, '0')} → 다음: L${String(nextSeq).padStart(3, '0')}` : '신규 제품');
+  
   const hint = document.getElementById('sn_seqHint');
-  if (hint) {
-    const existing = Object.keys(DATA).filter(sn => sn.toUpperCase().startsWith(cat.toUpperCase()));
-    hint.textContent = `현재 ${cat} 시리즈: ${existing.length}건`;
-  }
+  if (hint) hint.textContent = hintText;
+  
+  const seqInput = document.getElementById('sn_seq');
+  if (seqInput) seqInput.value = nextSeq;
+  
   updateSNPreview();
 };
 
-window.onSheetNoChange = function() { updateSNPreview(); };
+window.onSheetNoChange = function() {
+  updateSNPreview();
+};
 
 window.updateSNPreview = function() {
-  const sheet = document.getElementById('sn_sheet').value.trim();
   const prodId = document.getElementById('sn_prod').value;
+  const startDate = document.getElementById('sn_start')?.value || todayStr();
+  const sheet = startDate.replace(/-/g, '').slice(2);
   const qty = parseInt(document.getElementById('sn_qty').value) || 1;
   const seq = parseInt(document.getElementById('sn_seq').value) || 1;
   const prod = PRODUCTS[prodId];
   const preview = document.getElementById('sn_preview');
   if (!preview) return;
 
-  if (!prod || !sheet) { preview.textContent = '제품과 시트번호를 입력하세요'; return; }
+  if (!prod) { preview.textContent = '제품을 선택하세요'; return; }
 
   const cat = prod.category || 'WN';
-  const name = (prod.name || '').replace(/\s/g, '');
+  const snCode = getSNCodeLocal(cat, prodId);
   let items = [];
   for (let i = 0; i < Math.min(qty, 50); i++) {
-    const num = String(seq + i).padStart(3, '0');
-    items.push(`${cat}${sheet}-${num}-${name}`);
+    const num = String(((seq + i - 1) % 999) + 1).padStart(3, '0');
+    items.push(`${cat}${sheet}-${snCode}-L${num}`);
   }
   preview.innerHTML = items.map(s => `<div>${esc(s)}</div>`).join('');
 };
@@ -2909,43 +2944,43 @@ window.checkEquipConflict = function() {
   if (!warn) return;
   if (!equip || !startDate) { warn.innerHTML = ''; return; }
 
-  const conflicts = Object.entries(DATA).filter(([sn, d]) =>
-    getRoute(sn, d).some(proc => {
-      const p = getProc(d, proc);
-      if (p.equip !== equip || p.status === '완료') return false;
-      const ps = fD(p.planStart || p.actualStart);
-      const pe = fD(p.planEnd);
-      return ps && pe && startDate >= ps && startDate <= pe;
-    })
-  );
+  const conflicts = Object.entries(DATA).filter(([sn, d]) => {
+    const p = getProc(d, '탈지'); 
+    if(!p) return false;
+    if (p.equip !== equip || p.status === '완료') return false;
+    const ps = fD(p.planStart || p.actualStart);
+    const pe = fD(p.planEnd);
+    return ps && pe && startDate >= ps && startDate <= pe;
+  });
   warn.innerHTML = conflicts.length
-    ? `<div style="font-size:11px;color:var(--warn);margin-top:3px">⚠️ ${equip}이(가) ${conflicts.length}건과 일정 겹침</div>`
+    ? `<div style="font-size:11px;color:var(--warn);margin-top:3px">⚠️ 탈지 ${equip}이(가) ${conflicts.length}건과 일정 겹침</div>`
     : '';
 };
 
 window.saveSNBatch = async function() {
   const batch = document.getElementById('sn_batch').value.trim();
-  const sheet = document.getElementById('sn_sheet').value.trim();
   const prodId = document.getElementById('sn_prod').value;
   const qty = parseInt(document.getElementById('sn_qty').value) || 1;
-  const seq = parseInt(document.getElementById('sn_seq').value) || 1;
   const startDate = document.getElementById('sn_start').value;
   const equip = document.getElementById('sn_equip').value;
   const prod = PRODUCTS[prodId];
 
-  if (!prod || !sheet || !batch) { toast('필수 항목을 입력하세요', 'warn'); return; }
-  if (!startDate) { toast('시작일을 입력하세요', 'warn'); return; }
+  if (!prod || !batch || !startDate) { toast('필수 항목을 입력하세요', 'warn'); return; }
 
+  const sheet = startDate.replace(/-/g, '').slice(2);
   const cat = prod.category || 'WN';
   const heat = prod.heat || 'N';
   const route = buildRoute(cat, heat, "");
-  const name = (prod.name || '').replace(/\s/g, '');
+  
+  const maxSeq = getMaxSeqLocal(cat, prodId);
+  let currentSeq = (maxSeq >= 999) ? 1 : maxSeq + 1;
+  const snCode = getSNCodeLocal(cat, prodId);
 
   try {
     const writeBatch = FB.writeBatch(firebaseDb);
     for (let i = 0; i < qty; i++) {
-      const num = String(seq + i).padStart(3, '0');
-      const sn = `${cat}${sheet}-${num}-${name}`;
+      const num = String(((currentSeq + i - 1) % 999) + 1).padStart(3, '0');
+      const sn = `${cat}${sheet}-${snCode}-L${num}`;
       const processes = {};
       let cursor = startDate;
 
