@@ -50,9 +50,9 @@ Public Sub ProcessFlatNG(ws As Worksheet, r As Long, memo As String)
     
     If c > NG_MAX_FLAT Then
         ws.Cells(r, PROD_COL_STATUS).Value = ST_SCRAP
-        AppendMemo ws, r, "자동폐기", "평탄화 " & c & "회 초과"
+        AppendMemo ws, r, "자동NG", "평탄화 " & c & "회 초과"
         WriteProcLog ws, r, PROC_FLATTENING, ST_SCRAP, "", _
-                     "평탄화 " & c & "회 초과 자동폐기"
+                     "평탄화 " & c & "회 초과 자동NG"
     Else
         ws.Cells(r, PROD_COL_PROCESS).Value = PROC_FLATTENING
         ws.Cells(r, PROD_COL_STATUS).Value = ST_WAIT
@@ -68,12 +68,12 @@ End Sub
 '────────────────────────────────────────────────────────────────
 Public Sub ProcessSubNG(ws As Worksheet, r As Long, memo As String)
     ws.Cells(r, PROD_COL_PROCESS).Value = NG_SUB
-    ws.Cells(r, PROD_COL_STATUS).Value = ST_WAIT
+    ws.Cells(r, PROD_COL_STATUS).Value = "선가공"
     ws.Cells(r, PROD_COL_EQUIP).Value = "외주"
     ws.Cells(r, PROD_COL_START).Value = ""
     ws.Cells(r, PROD_COL_END).Value = ""
     AppendMemo ws, r, "선가공전환", memo
-    WriteProcLog ws, r, NG_SUB, ST_WAIT, "외주", "선가공 전환 " & memo
+    WriteProcLog ws, r, NG_SUB, "선가공", "외주", "선가공 전환 " & memo
 End Sub
 
 '────────────────────────────────────────────────────────────────
@@ -82,22 +82,13 @@ End Sub
 Public Sub ProcessResistNG(ws As Worksheet, r As Long, memo As String)
     Dim curProc As String
     curProc = SafeStr(ws.Cells(r, PROD_COL_PROCESS).Value)
-    ws.Cells(r, PROD_COL_DEFECT).Value = "저항NG"
+    ws.Cells(r, PROD_COL_STATUS).Value = ST_SCRAP
+    ws.Cells(r, PROD_COL_DEFECT).Value = "저항"
     ws.Cells(r, PROD_COL_DEFPROC).Value = curProc
-    AppendMemo ws, r, "저항NG", memo
-    WriteProcLog ws, r, curProc, "저항NG", "", "저항NG " & memo
+    AppendMemo ws, r, "저항", memo
+    WriteProcLog ws, r, curProc, ST_SCRAP, "", "저항 " & memo
 End Sub
 
-'────────────────────────────────────────────────────────────────
-' 폐기 (수동폐기 별도 유지)
-'────────────────────────────────────────────────────────────────
-Public Sub ProcessScrapNG(ws As Worksheet, r As Long, memo As String)
-    Dim curProc As String
-    curProc = SafeStr(ws.Cells(r, PROD_COL_PROCESS).Value)
-    ws.Cells(r, PROD_COL_STATUS).Value = ST_SCRAP
-    AppendMemo ws, r, "폐기", memo
-    WriteProcLog ws, r, curProc, ST_SCRAP, "", "수동폐기 " & memo
-End Sub
 
 '────────────────────────────────────────────────────────────────
 ' 메모 누적

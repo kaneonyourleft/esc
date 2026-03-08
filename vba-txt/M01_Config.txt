@@ -37,7 +37,7 @@ Public Const ST_WAIT  As String = "대기"
 Public Const ST_PROG  As String = "진행"
 Public Const ST_DONE  As String = "완료"
 Public Const ST_DELAY As String = "지연"
-Public Const ST_SCRAP As String = "폐기"
+Public Const ST_SCRAP As String = "NG"
 
 
 
