@@ -346,6 +346,8 @@ Private Sub mBtnExec_Click()
                         ProcessSubNG ws, mRows(i), memo
                         sCnt = sCnt + 1
                     Case NG_SCRAP
+                        ProcessScrapNG ws, mRows(i), memo
+                    Case NG_RESIST
                         ProcessResistNG ws, mRows(i), memo
                         rCnt = rCnt + 1
                 End Select
