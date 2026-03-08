@@ -1220,19 +1220,61 @@ window.applyBatch = async function() {
   } catch (err) { handleFirestoreError(err, '일괄 상태 변경'); }
 };
 
-window.applyNG = async function() {
+window.applyNG = function() {
   if (!wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
-  if (!confirm(`${wsSelection.size}건을 NG(폐기) 처리하시겠습니까?`)) return;
+  
+  // 초기화 후 모달 열기
+  document.getElementById('ng_reason_select').value = '';
+  document.getElementById('ng_reason_custom').value = '';
+  document.getElementById('ng_reason_custom_wrap').classList.add('hidden');
+  
+  openModal('ngReasonModal');
+};
+
+window.toggleNGReasonCustom = function(val) {
+  const wrap = document.getElementById('ng_reason_custom_wrap');
+  if (val === '기타') wrap.classList.remove('hidden');
+  else wrap.classList.add('hidden');
+};
+
+window.submitNGBatch = async function() {
+  const selectVal = document.getElementById('ng_reason_select').value;
+  let reason = selectVal;
+  if (selectVal === '기타') {
+    reason = document.getElementById('ng_reason_custom').value.trim();
+  }
+  
+  if (!reason) { toast('폐기 사유를 입력하세요', 'warn'); return; }
+  
   try {
     const batch = FB.writeBatch(firebaseDb);
     wsSelection.forEach(sn => {
+      const d = DATA[sn];
+      if (!d) return;
+      
+      const route = getRoute(sn, d);
+      const curProc = d.currentProcess || route[0] || '';
+      
       const ref = FB.doc(firebaseDb, 'production', sn);
-      batch.update(ref, { status: '폐기' });
+      const updates = {
+        status: '폐기',
+        ngReason: reason
+      };
+      
+      // 현재 공정 상태도 '폐기'로 변경
+      if (curProc) {
+        updates[`processes.${curProc}.status`] = '폐기';
+      }
+      
+      batch.update(ref, updates);
     });
+    
     await batch.commit();
-    toast(`${wsSelection.size}건 NG 처리 완료`, 'success');
+    toast(`${wsSelection.size}건 폐기(NG) 처리 완료`, 'success');
+    closeModal('ngReasonModal');
     wsSelection.clear();
-  } catch (err) { handleFirestoreError(err, 'NG 처리'); }
+    renderWorkspace();
+  } catch (err) { handleFirestoreError(err, '폐기 처리'); }
 };
 
 window.applyBatchStart = async function() {
