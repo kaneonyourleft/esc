@@ -1,7 +1,8 @@
-import { DATA, PRODUCTS, ISSUES, PROC_ORDER, PROC_COLORS } from './main.js';
+import { DATA, PRODUCTS, ISSUES } from './state.js';
+import { PROC_ORDER, PROC_COLORS } from './constants.js';
 import { fD, fmt, todayStr, diffBD } from './date-utils.js';
 import { getProc, getRoute, extractCategory } from './production-service.js';
-import { drawDonutChart, drawWeeklyChart } from './main.js';
+import { drawDonutChart, drawWeeklyChart } from './chart-service.js';
 
 /**
  * Render Analysis Tab

@@ -2,9 +2,12 @@
  * ESC Manager - Today/Home View Logic
  * @module today-view
  */
-import { DATA, PROC_COLORS, currentUser, openSidePanel, statusBadge, getWidgets, drawDonutChart, drawWeeklyChart, esc } from './main.js';
+import { DATA, currentUser, PRODUCTS, ISSUES } from './state.js';
+import { PROC_COLORS } from './constants.js';
+import { statusBadge, esc } from './app-utils.js';
 import { todayStr, fmt } from './date-utils.js';
-import { getKpiStats, getPipelineStats, getTodayTasks, getAlerts } from './today-service.js';
+import { getWidgets, getKpiStats, getPipelineStats, getTodayTasks, getAlerts } from './today-service.js';
+import { drawDonutChart, drawWeeklyChart } from './chart-service.js';
 
 /**
  * Main Home tab renderer

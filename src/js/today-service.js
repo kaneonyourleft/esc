@@ -2,9 +2,26 @@
  * ESC Manager - Today View Data Transformation Service
  * @module today-service
  */
-import { DATA, PROC_ORDER, PROC_COLORS } from './main.js';
 import { fD, todayStr, diffBD } from './date-utils.js';
+import { DATA } from './state.js';
+import { PROC_ORDER, PROC_COLORS, DEFAULT_WIDGETS } from './constants.js';
 import { buildRoute, getProc } from './production-service.js';
+
+let widgetCache = null;
+
+export function getWidgets() {
+  if (widgetCache) return widgetCache;
+  try {
+    const saved = localStorage.getItem('esc_widgets');
+    if (saved) return widgetCache = JSON.parse(saved);
+  } catch {}
+  return widgetCache = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
+}
+
+export function saveWidgets(list) {
+  widgetCache = list;
+  localStorage.setItem('esc_widgets', JSON.stringify(list));
+}
 
 /**
  * Aggregate KPI statistics for widgets

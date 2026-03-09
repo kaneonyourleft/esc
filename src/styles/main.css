@@ -1,4 +1,4 @@
-﻿/* ===================================================
+/* ===================================================
    ESC Manager v10.0 - main.css
    =================================================== */
 
@@ -319,7 +319,7 @@ body {
 .tb-title { font-size: 16px; font-weight: 600; flex: 1; }
 .tb-btn {
   background: none; border: none; color: var(--t2); cursor: pointer;
-  width: 36px; height: 36px; border-radius: 6px;
+  width: 44px; height: 44px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   transition: 0.15s;
 }
@@ -436,13 +436,15 @@ body {
 
 /* === 버튼 === */
 .btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 14px; border-radius: var(--r4);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 20px; border-radius: var(--r4);
   border: none; cursor: pointer;
-  font-size: 13px; font-weight: 500;
+  font-size: 14px; font-weight: 500;
   transition: 0.15s;
+  min-height: 44px;
   font-family: 'Noto Sans KR', sans-serif;
   white-space: nowrap;
+  user-select: none;
 }
 .btn-primary { background: linear-gradient(135deg, var(--ac1), var(--ac2)); color: #fff; }
 .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
@@ -450,7 +452,7 @@ body {
 .btn-secondary:hover { background: var(--glass); border-color: var(--ac1); }
 .btn-danger { background: rgba(239,68,68,0.15); color: var(--err); border: 1px solid rgba(239,68,68,0.3); }
 .btn-danger:hover { background: rgba(239,68,68,0.25); }
-.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-sm { padding: 8px 12px; font-size: 13px; min-height: 36px; } /* Smallest allowed height, usually not for main actions */
 .btn-icon {
   padding: 6px; border-radius: 6px;
   background: none; border: none; color: var(--t2);
@@ -484,10 +486,11 @@ body {
 /* === 탭, 필터 === */
 .tab-btns { display: flex; gap: 6px; margin-bottom: 16px; }
 .tab-btn {
-  padding: 7px 16px; border-radius: var(--r4);
+  padding: 10px 20px; border-radius: var(--r4);
   border: 1px solid var(--border); background: var(--bg4);
-  color: var(--t2); cursor: pointer; font-size: 13px;
+  color: var(--t2); cursor: pointer; font-size: 14px;
   transition: 0.15s; font-family: 'Noto Sans KR', sans-serif;
+  min-height: 44px;
 }
 .tab-btn.active { background: rgba(99,102,241,0.2); border-color: var(--ac1); color: var(--ac2); }
 

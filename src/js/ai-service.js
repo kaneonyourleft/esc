@@ -1,4 +1,6 @@
-import { DATA, PRODUCTS, ISSUES, currentUser, toast, FB, firebaseDb } from './main.js';
+import { DATA, PRODUCTS, ISSUES, currentUser, firebaseDb, FB } from './state.js';
+import { PROC_ORDER } from './constants.js';
+import { toast, esc } from './app-utils.js';
 import { fD, fmt, todayStr, debounce } from './date-utils.js';
 import { getProc, getRoute } from './production-service.js';
 
@@ -169,4 +171,3 @@ export const sendMiniChat = debounce(async function() {
   container.scrollTop = container.scrollHeight;
 }, 300);
 
-const esc = (str) => str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
