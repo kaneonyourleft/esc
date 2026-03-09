@@ -2,6 +2,7 @@ import * as S from './state.js';
 import { PROC_ORDER, PROC_COLORS, EQ_MAP, DEFAULT_WIDGETS } from './constants.js';
 import { handleFirestoreError, toast, openModal, closeModal, statusBadge, esc } from './app-utils.js';
 import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, getEquipList, calcProgress, extractCategory, extractBatchFromSN, positionDropdown, handleEmptyChart, mdToHtml } from './utils.js';
+import { renderTodayView } from './today-view.js';
 
 // ===================================================
 // ESC Manager v10.0 - main.js
@@ -77,6 +78,10 @@ async function initFirebase() {
     onSnapshot, query, orderBy, where, writeBatch, Timestamp, serverTimestamp,
     GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
   };
+
+  // Export to window for today-view.js
+  window.FB = FB;
+  window.firebaseDb = firebaseDb;
 
   setupAuth();
 }
@@ -317,7 +322,7 @@ function renderHome() {
   const greet = hour < 12 ? '좋은 아침입니다' : hour < 18 ? '좋은 오후입니다' : '좋은 저녁입니다';
   const name = S.currentUser?.displayName || '사용자';
   document.getElementById('greetMsg').textContent = `${greet}, ${name}님!`;
-  document.getElementById('greetSub').textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 — 현재 생산 현황을 확인하세요`;
+  document.getElementById('greetSub').textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 — 현장 실행 중심 작업 현황`;
 
   const delayed = Object.entries(S.DATA).filter(([, d]) => (d.status || '대기') === '지연');
   const alertCard = document.getElementById('delayAlertCard');
@@ -327,7 +332,9 @@ function renderHome() {
   } else {
     alertCard.style.display = 'none';
   }
-  renderWidgets();
+  
+  // 기존 위젯 대신 오늘 할 일 뷰 렌더링
+  renderTodayView();
 }
 
 function renderWidgets() {

@@ -1203,6 +1203,188 @@ canvas { display: block; }
   .qr-print-item span { color: #000 !important; font-size: 8px !important; }
 }
 
+/* === Today View (오늘 할 일) === */
+.today-date-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--bg2);
+  border-radius: var(--r8);
+  border: 1px solid var(--border);
+}
+
+.today-date-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--t1);
+  min-width: 200px;
+  text-align: center;
+}
+
+.today-section {
+  margin-bottom: 24px;
+}
+
+.today-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg3);
+  border-radius: var(--r8);
+  margin-bottom: 12px;
+  border-left: 4px solid var(--ac1);
+}
+
+.today-section-delayed .today-section-header {
+  background: rgba(239, 68, 68, 0.08);
+  border-left-color: var(--err);
+}
+
+.today-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.today-task-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r8);
+  padding: 0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.today-task-card:hover {
+  border-color: var(--ac1);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.today-task-delayed {
+  border-left: 4px solid var(--err);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.today-task-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.today-task-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.today-task-process {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.today-task-product {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t1);
+  margin-bottom: 2px;
+}
+
+.today-task-quantity {
+  font-size: 12px;
+  color: var(--t2);
+}
+
+.today-card-arrow {
+  font-size: 12px;
+  color: var(--t2);
+  margin-left: 8px;
+  transition: transform 0.2s;
+}
+
+.today-task-details {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg3);
+}
+
+.today-task-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.today-task-detail-label {
+  color: var(--t2);
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.today-task-detail-value {
+  color: var(--t1);
+  text-align: right;
+  font-family: 'Noto Sans KR', monospace;
+}
+
+.btn-success {
+  background: var(--suc);
+  color: #fff;
+  border: none;
+}
+
+.btn-success:hover {
+  background: #059669;
+}
+
+@media (max-width: 768px) {
+  .today-date-bar {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .today-date-text {
+    font-size: 15px;
+    min-width: 160px;
+  }
+
+  .today-section-header {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .today-task-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .today-task-process {
+    font-size: 14px;
+  }
+
+  .today-task-product {
+    font-size: 13px;
+  }
+
+  .today-task-detail-row {
+    font-size: 12px;
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+
+
 
 
 
