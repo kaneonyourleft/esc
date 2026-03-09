@@ -1,8 +1,3 @@
-/**
- * ESC Manager - Constants
- * @module constants
- */
-
 export const PROC_ORDER = ['탈지', '소성', '환원소성', '평탄화', '도금', '열처리'];
 
 export const PROC_COLORS = {

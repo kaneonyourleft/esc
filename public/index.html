@@ -8,8 +8,8 @@
   <title>ESC Manager v10.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-BGdiZnE3.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/assets/index-C4Ji3i_m.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-hCfEOEVF.css">
 </head>
 <body>
@@ -209,10 +209,7 @@
               <input type="date" class="form-input" id="batchStartDate" style="width:130px;padding:4px 6px;font-size:12px" title="시작일">
               <input type="date" class="form-input" id="batchEndDate" style="width:130px;padding:4px 6px;font-size:12px" title="납기일">
               <div style="display:flex;gap:4px;margin-left:auto">
-                <button class="btn btn-primary btn-sm" onclick="applyBatchStart()">▶ 일괄 시작</button>
-                <button class="btn btn-success btn-sm" onclick="applyBatchComplete()">✓ 일괄 완료</button>
-                <div style="width:1px;height:24px;background:var(--border);margin:0 4px"></div>
-                <button class="btn btn-primary btn-sm" onclick="applyBatchAll()">상태변경</button>
+                <button class="btn btn-primary btn-sm" onclick="applyBatchAll()">적용</button>
                 <button class="btn btn-danger btn-sm" onclick="applyNG()">NG</button>
                 <button class="btn btn-secondary btn-sm" onclick="generateBatchQR()">QR</button>
                 <button class="btn btn-secondary btn-sm" onclick="clearSelection()">해제</button>
@@ -689,36 +686,6 @@
     </div>
   </div>
 
-  <!-- NG(폐기) 사유 입력 모달 -->
-  <div class="modal-overlay hidden" id="ngReasonModal">
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">⚠️ 폐기(NG) 처리 사유 입력</div>
-        <button class="modal-close btn-icon" onclick="closeModal('ngReasonModal')">✕</button>
-      </div>
-      <div class="form-group" style="margin-top:12px">
-        <label class="form-label">폐기 사유 선택 *</label>
-        <select class="form-input form-select" id="ng_reason_select" onchange="toggleNGReasonCustom(this.value)">
-          <option value="">사유를 선택하세요...</option>
-          <option value="크랙">크랙 (Crack)</option>
-          <option value="변형">변형 (Deformation)</option>
-          <option value="오염">오염 (Contamination)</option>
-          <option value="치수불량">치수 불량</option>
-          <option value="가공불량">가공 불량</option>
-          <option value="기타">기타 (직접 입력)</option>
-        </select>
-      </div>
-      <div class="form-group hidden" id="ng_reason_custom_wrap">
-        <label class="form-label">직접 입력 *</label>
-        <textarea class="form-input" id="ng_reason_custom" rows="3" placeholder="상세 사유를 입력하세요"></textarea>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-        <button class="btn btn-secondary" onclick="closeModal('ngReasonModal')">취소</button>
-        <button class="btn btn-danger" onclick="submitNGBatch()">폐기 처리 확정</button>
-      </div>
-    </div>
-  </div>
-
 </body>
 </html>
 
