@@ -332,9 +332,67 @@ function renderHome() {
   } else {
     alertCard.style.display = 'none';
   }
+
+  // 모닝 브리핑 카드 삽입
+  renderBriefingCard();
   
   // 기존 위젯 대신 오늘 할 일 뷰 렌더링
   renderTodayView();
+}
+
+function renderBriefingCard() {
+  const container = document.getElementById('briefingContainer');
+  if (!container) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  // 어제 완료
+  let yesterdayDone = 0;
+  Object.values(S.DATA).forEach(d => {
+    getRoute('', d).forEach(proc => {
+      const p = getProc(d, proc);
+      if (fD(p.actualEnd) === yesterday) yesterdayDone++;
+    });
+  });
+
+  // 오늘 예정
+  let todayPlanned = 0;
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    getRoute(sn, d).forEach(proc => {
+      const p = getProc(d, proc);
+      if (fD(p.planStart) === today || fD(p.actualStart) === today) todayPlanned++;
+    });
+  });
+
+  // 지연 수
+  const delayCount = Object.values(S.DATA).filter(d => (d.status || '대기') === '지연').length;
+
+  // 가장 바쁜 설비
+  const equipCount = {};
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    if (d.status !== '진행') return;
+    const proc = d.currentProcess;
+    if (!proc) return;
+    const eq = getProc(d, proc).equip;
+    if (eq) equipCount[eq] = (equipCount[eq] || 0) + 1;
+  });
+  const busiestEquip = Object.entries(equipCount).sort((a, b) => b[1] - a[1])[0];
+
+  container.innerHTML = `
+    <div class="briefing-card">
+      <div class="briefing-icon">🌅</div>
+      <div class="briefing-content">
+        <div class="briefing-title">모닝 브리핑</div>
+        <div class="briefing-stats">
+          <span class="briefing-stat">어제 <strong>${yesterdayDone}건</strong> 완료</span>
+          <span class="briefing-stat">오늘 <strong>${todayPlanned}건</strong> 예정</span>
+          ${delayCount > 0 ? `<span class="briefing-stat" style="color:var(--err)">지연 <strong>${delayCount}건</strong> 주의</span>` : '<span class="briefing-stat" style="color:var(--suc)">지연 <strong>없음</strong> ✓</span>'}
+          ${busiestEquip ? `<span class="briefing-stat">가장 바쁜 설비: <strong>${busiestEquip[0]}(${busiestEquip[1]}건)</strong></span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderWidgets() {
@@ -1555,3 +1613,20 @@ document.addEventListener('pointerdown', (e) => {
     if (!e.target.closest('.sn-cell')) closeSidePanel();
   }
 });
+
+// ===================================================
+// 전역 등록 (gantt.js 등 CDN 방식 스크립트용)
+// ===================================================
+window.getRoute = getRoute;
+window.getProc = getProc;
+window.fD = fD;
+window.esc = esc;
+window.EQ_MAP = EQ_MAP;
+window.extractCategory = extractCategory;
+window.extractBatchFromSN = extractBatchFromSN;
+window.calcProgress = calcProgress;
+window.getEquipList = getEquipList;
+window.getFiltered = function() {
+  return S.DATA;
+};
+window.S = S;

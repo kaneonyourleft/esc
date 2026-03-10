@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles/main.css">
 </head>
 <body>
@@ -134,6 +135,7 @@
               <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="switchTab('workspace');toggleFilter('지연')">확인하기</button>
             </div>
           </div>
+          <div id="briefingContainer"></div>
           <div id="dataStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px"></div>
           <div id="widgetContainer"></div>
         </div>
@@ -686,7 +688,8 @@
   </div>
 
   <script type="module" src="./js/main.js"></script>
-    <script type="module" src="./js/gantt.js"></script>
+  <script type="module" src="./js/gantt.js"></script>
+  <script type="module" src="./js/ai.js"></script>
 </body>
 </html>
 
