@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-DOTAeWca.js"></script>
+  <script type="module" crossorigin src="/assets/index-Dd2muZqV.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-DoV06fVY.css">
 </head>
 <body>
@@ -308,23 +308,12 @@
 
         <!-- 설정 탭 -->
         <div class="tab-content" id="settingsTab" style="display:none">
-          <div class="setting-section">
-            <div class="setting-title">👤 계정 정보</div>
-            <div class="setting-row">
-              <div>
-                <div style="font-size:14px;font-weight:500" id="settingName">사용자</div>
-                <div style="font-size:12px;color:var(--t2)" id="settingEmail"></div>
-              </div>
-              <button class="btn btn-danger btn-sm" onclick="doLogout()">로그아웃</button>
-            </div>
+          <!-- hidden anchors kept for setupAuth() -->
+          <div style="display:none">
+            <span id="settingName"></span>
+            <span id="settingEmail"></span>
           </div>
-          <div class="setting-section">
-            <div class="setting-title">🎨 테마</div>
-            <div class="setting-row">
-              <span>다크 모드</span>
-              <div class="toggle" id="themeToggle" onclick="toggleTheme()"></div>
-            </div>
-          </div>
+          <!-- static always-visible section -->
           <div class="setting-section">
             <div class="setting-title">🤖 Gemini AI 설정</div>
             <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -337,6 +326,8 @@
             <div class="setting-title">📊 데이터 현황</div>
             <div id="dataStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
           </div>
+          <!-- dynamic content injected by settings.js renderSettings() -->
+          <div id="settingsContent"></div>
         </div>
 
       </div><!-- /content -->

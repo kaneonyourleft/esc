@@ -44,7 +44,7 @@ function gDateRange(filtered) {
     var route = window.getRoute(sn, d);
     route.forEach(function(proc) {
       var p = window.getProc(d, proc);
-      var s = window.fD(p.startDate);
+      var s = window.fD(p.actualStart) || window.fD(p.planStart);
       var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
       if (s && s < mn) mn = s;
       if (e && e > mx) mx = e;
@@ -103,7 +103,7 @@ window.toggleG = toggleG;
 
 function gMakeBar(sn, d, proc, dates) {
   var p = window.getProc(d, proc);
-  var s = window.fD(p.startDate);
+  var s = window.fD(p.actualStart) || window.fD(p.planStart);
   var eAct = window.fD(p.actualEnd);
   var ePlan = window.fD(p.planEnd);
   var e = eAct || ePlan;
@@ -116,8 +116,7 @@ function gMakeBar(sn, d, proc, dates) {
   if (x2 < 0) x2 = dates.length - 1;
   if (x2 < x1) x2 = x1;
   var bar = { x1:x1, x2:x2, proc:proc, sn:sn, status:status,
-    bid: d.batchId||'', pname: d.productName||'', s:s, e:e, eAct:eAct, ePlan:ePlan };
-  // 지연 판단
+    bid: d.batchId||d.batch||'', pname: d.productName||'', s:s, e:e, eAct:eAct, ePlan:ePlan };
   if (status !== '완료' && ePlan && today > ePlan) {
     bar.delayed = true;
     bar.delayDays = gDays(ePlan, today);
@@ -245,7 +244,7 @@ function gBuildBatch(filtered, dates) {
           var sts = '대기', hasProg = false, hasComp = true;
           items.forEach(function(it) {
             var p = window.getProc(it.d, proc);
-            var s = window.fD(p.startDate);
+            var s = window.fD(p.actualStart) || window.fD(p.planStart);
             var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
             if (s && s < mn) mn = s;
             if (e && e > mx) mx = e;
@@ -311,7 +310,7 @@ function gBuildProduct(filtered, dates) {
           var sts = '대기', hasProg = false, hasComp = true;
           items.forEach(function(it) {
             var p = window.getProc(it.d, proc);
-            var s = window.fD(p.startDate);
+            var s = window.fD(p.actualStart) || window.fD(p.planStart);
             var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
             if (s && s < mn) mn = s;
             if (e && e > mx) mx = e;
@@ -348,7 +347,7 @@ window.renderGantt = function renderGantt() {
   var cnt = Object.keys(filtered).length;
   if (cnt === 0) {
     var el = document.getElementById('ganttContent');
-    if (el) el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text2)">\uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>';
+    if (el) el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--t2)">\uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>';
     return;
   }
 
@@ -376,7 +375,7 @@ window.renderGantt = function renderGantt() {
     if (m !== curM) {
       if (curM) {
         var mw = (i - mStart) * ganttCellW;
-        hH += '<div style="width:'+mw+'px;min-width:'+mw+'px;text-align:center;font-size:11px;font-weight:600;color:var(--text2);line-height:'+G_HEAD+'px;border-right:1px solid var(--border)">'+curM+'</div>';
+        hH += '<div style="width:'+mw+'px;min-width:'+mw+'px;text-align:center;font-size:11px;font-weight:600;color:var(--t2);line-height:'+G_HEAD+'px;border-right:1px solid var(--border)">'+curM+'</div>';
       }
       curM = m; mStart = i;
     }
@@ -389,7 +388,7 @@ window.renderGantt = function renderGantt() {
     var day = new Date(dt+'T00:00:00').getDay();
     var isWe = day === 0 || day === 6;
     var isToday = dt === today;
-    var bg = isToday ? 'background:var(--primary);color:#fff;border-radius:4px;' : isWe ? 'color:var(--text3);' : '';
+    var bg = isToday ? 'background:var(--ac1);color:#fff;border-radius:4px;' : isWe ? 'color:var(--t3);' : '';
     hH += '<div style="width:'+ganttCellW+'px;min-width:'+ganttCellW+'px;text-align:center;font-size:10px;line-height:'+G_HEAD+'px;'+bg+'">'+parseInt(dt.slice(8))+'</div>';
   });
   hH += '</div>';
@@ -407,39 +406,39 @@ window.renderGantt = function renderGantt() {
       sbH += '</div>';
     } else if (r.type === 'equip') {
       var arrow = r.expanded ? '\u25BC' : '\u25B6';
-      var countBadge = r.count > 0 ? '<span style="margin-left:auto;background:var(--bg3);padding:1px 6px;border-radius:8px;font-size:10px;color:var(--text2)">'+r.count+'</span>' : '<span style="margin-left:auto;font-size:10px;color:var(--text3)">\u2014</span>';
+      var countBadge = r.count > 0 ? '<span style="margin-left:auto;background:var(--bg3);padding:1px 6px;border-radius:8px;font-size:10px;color:var(--t2)">'+r.count+'</span>' : '<span style="margin-left:auto;font-size:10px;color:var(--t3)">\u2014</span>';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 20px;cursor:pointer;font-size:12px;gap:4px;border-bottom:1px solid var(--border);background:var(--bg2)">';
-      sbH += '<span style="font-size:9px;color:var(--text3);width:12px">'+arrow+'</span>';
+      sbH += '<span style="font-size:9px;color:var(--t3);width:12px">'+arrow+'</span>';
       sbH += '<span style="color:'+G_CLR[r.proc]+';font-size:10px">\u25A0</span> ';
       sbH += esc(r.label);
       sbH += countBadge;
       sbH += '</div>';
     } else if (r.type === 'prodLine') {
-      sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 40px;font-size:11px;gap:4px;border-bottom:1px solid var(--border);color:var(--text1)">';
+      sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 40px;font-size:11px;gap:4px;border-bottom:1px solid var(--border);color:var(--t1)">';
       sbH += '<span style="width:8px;height:8px;border-radius:50%;background:'+gBatchColor(r.bid)+';flex-shrink:0"></span>';
-      sbH += esc(r.pname) + ' <span style="color:var(--text3);font-size:10px">('+r.count+'\uB9E4)</span>';
+      sbH += esc(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
       sbH += '</div>';
     } else if (r.type === 'batchHead') {
       var arrow = r.expanded ? '\u25BC' : '\u25B6';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;cursor:pointer;font-weight:600;font-size:12px;gap:6px;border-top:2px solid var(--border);background:var(--bg1)">';
-      sbH += '<span style="font-size:9px;color:var(--text3)">'+arrow+'</span>';
+      sbH += '<span style="font-size:9px;color:var(--t3)">'+arrow+'</span>';
       sbH += '<span style="width:10px;height:10px;border-radius:3px;background:'+r.color+';flex-shrink:0"></span>';
-      sbH += esc(r.bid) + ' <span style="color:var(--text3);font-size:10px">('+r.count+')</span>';
+      sbH += esc(r.bid) + ' <span style="color:var(--t3);font-size:10px">('+r.count+')</span>';
       sbH += '</div>';
     } else if (r.type === 'batchProd') {
       sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;gap:4px;border-bottom:1px solid var(--border)">';
-      sbH += esc(r.pname) + ' <span style="color:var(--text3);font-size:10px">('+r.count+'\uB9E4)</span>';
+      sbH += esc(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
       sbH += '</div>';
     } else if (r.type === 'prodHead') {
       var arrow = r.expanded ? '\u25BC' : '\u25B6';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;cursor:pointer;font-weight:600;font-size:12px;gap:6px;border-top:2px solid var(--border);background:var(--bg1)">';
-      sbH += '<span style="font-size:9px;color:var(--text3)">'+arrow+'</span>';
-      sbH += esc(r.pname) + ' <span style="color:var(--text3);font-size:10px">('+r.count+'\uB9E4)</span>';
+      sbH += '<span style="font-size:9px;color:var(--t3)">'+arrow+'</span>';
+      sbH += esc(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
       sbH += '</div>';
     } else if (r.type === 'prodBatch') {
       sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;gap:6px;border-bottom:1px solid var(--border)">';
       sbH += '<span style="width:8px;height:8px;border-radius:2px;background:'+r.color+';flex-shrink:0"></span>';
-      sbH += esc(r.bid) + ' <span style="color:var(--text3);font-size:10px">('+r.count+'\uB9E4)</span>';
+      sbH += esc(r.bid) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
       sbH += '</div>';
     }
 
@@ -500,7 +499,7 @@ window.renderGantt = function renderGantt() {
     // fallback: ganttContent 방식
     var gc = document.getElementById('ganttContent');
     if (!gc) return;
-    gc.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2)">gantt grid not found</div>';
+    gc.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t2)">gantt grid not found</div>';
     return;
   }
   elHeader.innerHTML = hH;
