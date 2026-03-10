@@ -74,9 +74,9 @@ export function renderTodayView() {
 function renderDelayedSection(groups) {
   let html = `
     <div class="today-section today-section-delayed">
-      <div class="today-section-header">
+      <div class="today-section-header" style="background:var(--err);color:#fff">
         <span style="font-size:18px">⚠️</span>
-        <span style="font-weight:700;font-size:15px;color:var(--err)">지연 작업 (${groups.length})</span>
+        <span style="font-weight:700;font-size:15px">지연 작업 (${groups.length})</span>
       </div>
       <div class="today-cards">
   `;
@@ -159,8 +159,7 @@ function renderTaskCard(group, idx, isDelayed) {
     <div class="card today-task-card ${isDelayed ? 'today-task-delayed' : ''}" id="${cardId}">
       <div class="today-task-main" onclick="window.toggleTaskCard('${cardId}')">
         <div class="today-task-info">
-          <div class="today-task-proc-row">
-            <span class="today-proc-dot" style="background:${procColor}"></span>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span class="today-task-process" style="color:${procColor}">${esc(group.process)}</span>
             ${isDelayed ? `<span class="badge badge-danger">+${group.delayDays}일 지연</span>` : ''}
           </div>
