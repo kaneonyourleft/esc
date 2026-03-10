@@ -3,6 +3,7 @@ import { PROC_ORDER, PROC_COLORS, EQ_MAP, DEFAULT_WIDGETS } from './constants.js
 import { handleFirestoreError, toast, openModal, closeModal, statusBadge, esc } from './app-utils.js';
 import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, getEquipList, calcProgress, extractCategory, extractBatchFromSN, positionDropdown, handleEmptyChart, mdToHtml } from './utils.js';
 import { renderTodayView } from './today-view.js';
+import { renderSettings as _renderSettings } from './settings.js';
 
 // ===================================================
 // ESC Manager v10.0 - main.js
@@ -65,9 +66,11 @@ const firebaseConfig = {
 let firebaseApp, firebaseAuth, firebaseDb, FB = {};
 
 async function initFirebase() {
-  const { initializeApp } = await import(FB_CDN + 'firebase-app.js');
-  const { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } = await import(FB_CDN + 'firebase-auth.js');
-  const { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, writeBatch, Timestamp, serverTimestamp } = await import(FB_CDN + 'firebase-firestore.js');
+  /* eslint-disable */
+  const { initializeApp } = await import(/* @vite-ignore */ FB_CDN + 'firebase-app.js');
+  const { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } = await import(/* @vite-ignore */ FB_CDN + 'firebase-auth.js');
+  const { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, writeBatch, Timestamp, serverTimestamp } = await import(/* @vite-ignore */ FB_CDN + 'firebase-firestore.js');
+  /* eslint-enable */
 
   firebaseApp = initializeApp(firebaseConfig);
   firebaseAuth = getAuth(firebaseApp);
@@ -1289,6 +1292,37 @@ function renderIssueBoard(container) {
 
 // === 간트차트 === (gantt.js로 분리됨)
 // renderGantt, setGanttView 등은 src/js/gantt.js에서 window에 등록
+function renderGantt() {
+  if (typeof window.renderGantt === 'function') window.renderGantt();
+}
+
+// === 설정 탭 ===
+function renderSettings() {
+  _renderSettings();
+  // Sync Gemini key status in static HTML section (if it exists)
+  const keyInput = document.getElementById('geminiKeyInput');
+  const storedKey = localStorage.getItem('esc_gemini_key') || '';
+  if (keyInput && !keyInput.value) keyInput.value = storedKey;
+  const statusEl = document.getElementById('geminiKeyStatus');
+  if (statusEl) {
+    const hasKey = !!storedKey;
+    statusEl.textContent = hasKey ? '✅ API 키 등록됨' : '❌ API 키 미등록 — 로컬 AI 모드';
+    statusEl.style.color = hasKey ? 'var(--suc)' : 'var(--err)';
+  }
+}
+
+// saveGeminiKey is also registered in settings.js; provide fallback for inline HTML calls
+if (!window.saveGeminiKey) {
+  window.saveGeminiKey = function() {
+    const input = document.getElementById('geminiKeyInput');
+    const key = input ? input.value.trim() : '';
+    if (!key) { toast('API 키를 입력하세요', 'warn'); return; }
+    localStorage.setItem('esc_gemini_key', key);
+    toast('✅ Gemini API 키 저장됨', 'success');
+    const statusEl = document.getElementById('geminiKeyStatus');
+    if (statusEl) { statusEl.textContent = '✅ API 키 등록됨'; statusEl.style.color = 'var(--suc)'; }
+  };
+}
 
 // === 분석 탭 ===
 function renderAnalysis() {
