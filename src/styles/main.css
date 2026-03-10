@@ -44,10 +44,20 @@ body.light-mode {
   --t1: #111827;
   --t2: #6b7280;
   --t3: #9ca3af;
-  --border: #e5e7eb;
+  --border: #e8eaed;
   --card-bg: #ffffff;
   --glass: rgba(0,0,0,0.03);
 }
+body.light-mode .card {
+  background: #fff;
+  border-color: #e8eaed;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+body.light-mode .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+body.light-mode #sidebar { background: #fafbfc; border-right-color: #e8eaed; }
+body.light-mode .sb-item.active { background: rgba(99,102,241,0.06); color: #6366f1; }
+body.light-mode .form-input, body.light-mode .form-select { background: #fff; border-color: #d1d5db; color: #111827; }
+body.light-mode .esc-dropdown { background: #fff; border-color: #e5e7eb; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
 
 body {
   font-family: 'Inter', 'Noto Sans KR', -apple-system, sans-serif;
@@ -1248,6 +1258,93 @@ canvas { display: block; }
   font-family: 'Inter', 'Noto Sans KR', monospace;
 }
 
+/* 섹션 헤더 배지 */
+.today-section-title {
+  font-weight: 700;
+  font-size: 15px;
+  flex: 1;
+}
+.today-section-icon { font-size: 18px; flex-shrink: 0; }
+.today-section-badge {
+  background: var(--bg4);
+  color: var(--t2);
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: center;
+}
+.today-section-badge-danger {
+  background: rgba(239,68,68,0.15);
+  color: #fca5a5;
+}
+
+/* 카드 액션 영역 */
+.today-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 공정 상태 도트 (小) */
+.today-proc-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.today-proc-status-label {
+  font-size: 11px;
+  color: var(--t2);
+}
+
+/* S/N 범위 (monospace) */
+.today-sn-range {
+  font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: -0.3px;
+}
+
+/* 납기 배지 */
+.today-deadline-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+.today-deadline-badge.deadline-overdue  { background: rgba(239,68,68,0.15); color: #fca5a5; }
+.today-deadline-badge.deadline-today    { background: rgba(234,179,8,0.15); color: #fcd34d; }
+.today-deadline-badge.deadline-urgent   { background: rgba(249,115,22,0.15); color: #fdba74; }
+.today-deadline-badge.deadline-normal   { background: rgba(16,185,129,0.1); color: #6ee7b7; }
+
+/* 빈 상태 */
+.today-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--t2);
+}
+.today-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.today-empty-msg  { font-size: 15px; }
+
+/* 날짜 nav 버튼 (btn-icon 기본 스타일) */
+.btn-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--r8);
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  color: var(--t1);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.btn-icon:hover { background: var(--bg3); }
+.today-nav-btn { width: 40px; height: 40px; }
+
 /* === 반응형 (모바일) === */
 @media (max-width: 768px) {
   #sidebar, #sidebarToggleBtn { display: none !important; }
@@ -1468,3 +1565,43 @@ canvas { display: block; }
   .qr-print-item { border: 1px solid #ccc !important; background: #fff !important; padding: 4px !important; break-inside: avoid; }
   .qr-print-item span { color: #000 !important; font-size: 8px !important; }
 }
+
+/* === 오늘 작업 카드 — 공정별 left border === */
+.today-task-card:not(.today-task-delayed) {
+  border-left: 4px solid var(--ac1);
+  background: rgba(99,102,241,0.03);
+  border-radius: 16px;
+}
+
+/* === 배치 바 === */
+.batch-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  display: none;
+  z-index: 50;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.batch-bar.visible { display: flex; }
+
+/* === 분석 그리드 === */
+.analysis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .analysis-grid { grid-template-columns: 1fr; }
+}
+
+/* === 태블릿 (768~1024) === */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .grid4 { grid-template-columns: repeat(2, 1fr); }
+  .analysis-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* === Gemini API 키 상태 === */
+#geminiKeyStatus { font-size: 12px; margin-top: 6px; min-height: 18px; }

@@ -13,14 +13,30 @@ import { buildContext, parseCommand } from './ai-context.js';
 // ===================================================
 async function callGemini(apiKey, question) {
   const systemCtx = buildContext();
-  const prompt = `당신은 ESC(세라믹 정전척) 생산관리 AI 어시스턴트입니다. 아래 실시간 데이터를 기반으로 정확하고 간결하게 답변하세요. 마크다운 형식으로 답변하세요.
+  const prompt = `당신은 "ESC Manager AI"입니다 — 세라믹 정전척(ESC) 생산 공장의 전문 AI 어시스턴트입니다.
 
+## 역할
+- 실시간 생산 데이터를 분석하여 정확한 답변을 제공합니다
+- 지연 원인 분석, 병목 진단, 생산 효율 개선을 제안합니다
+- 공정 전문 용어(탈지, 소성, 환원소성, 평탄화, 도금, 열처리)를 정확히 사용합니다
+- 설비(1호기~18호기, 외주, GB)와 제품 카테고리(BL, DC, HL 등)를 이해합니다
+
+## 응답 규칙
+1. 한국어로 답변 (기술 용어는 그대로 사용)
+2. 숫자/통계는 볼드(**) 처리
+3. 테이블이 필요하면 마크다운 테이블 사용
+4. 핵심 정보 먼저, 상세 설명 나중에
+5. 개선 제안은 구체적 + 실행 가능해야 함
+6. 데이터에 없는 내용은 추측하지 말고 "데이터 확인 필요"라고 답변
+
+## 현재 실시간 데이터
 ${systemCtx}
 
-사용자 질문: ${question}`;
+## 사용자 질문
+${question}`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -295,8 +311,17 @@ window.sendChat = async function() {
       container.scrollTop = container.scrollHeight;
       return;
     } catch (e) {
-      typingEl.innerHTML = `<span style="color:var(--err)">오류: ${e.message}</span>`;
-      setTimeout(() => typingEl.remove(), 3000);
+      console.warn('Gemini error:', e);
+      typingEl.remove();
+      // Gemini 에러 시 로컬 AI로 폴백
+      const errDiv = document.createElement('div');
+      errDiv.className = 'chat-bubble ai';
+      errDiv.innerHTML = mdToHtml(generateLocalAI(msg)) +
+        `<div style="font-size:11px;color:var(--t2);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">` +
+        `⚠️ Gemini 연결 실패 (${e.message}) — 로컬 분석 결과입니다</div>`;
+      container.appendChild(errDiv);
+      container.scrollTop = container.scrollHeight;
+      return;
     }
   }
 
@@ -305,7 +330,52 @@ window.sendChat = async function() {
   typingEl.remove();
   const div = document.createElement('div');
   div.className = 'chat-bubble ai';
-  div.innerHTML = mdToHtml(generateLocalAI(msg));
+  div.innerHTML = mdToHtml(generateLocalAI(msg)) +
+    `<div style="font-size:11px;color:var(--t3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">` +
+    `💡 Gemini API 키를 등록하면 더 정확한 AI 분석을 받을 수 있습니다. 설정 → Gemini AI 설정에서 등록하세요.</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+};
+
+// ===================================================
+// 미니챗 연동
+// ===================================================
+window.sendMiniChat = async function() {
+  const input = document.getElementById('miniChatInput');
+  const msg = input ? input.value.trim() : '';
+  if (!msg) return;
+  if (input) input.value = '';
+
+  const container = document.getElementById('miniChatMessages');
+  if (!container) return;
+
+  const userDiv = document.createElement('div');
+  userDiv.className = 'chat-bubble user';
+  userDiv.style.fontSize = '12px';
+  userDiv.textContent = msg;
+  container.appendChild(userDiv);
+  container.scrollTop = container.scrollHeight;
+
+  const typingEl = addTypingIndicator(container);
+
+  const apiKey = localStorage.getItem('esc_gemini_key');
+  let response;
+  if (apiKey) {
+    try {
+      response = await callGemini(apiKey, msg);
+    } catch (e) {
+      response = generateLocalAI(msg);
+    }
+  } else {
+    await new Promise(r => setTimeout(r, 400));
+    response = generateLocalAI(msg);
+  }
+
+  typingEl.remove();
+  const div = document.createElement('div');
+  div.className = 'chat-bubble ai';
+  div.style.fontSize = '12px';
+  div.innerHTML = mdToHtml(response);
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 };
