@@ -41,16 +41,25 @@ function gDateRange(filtered) {
   var mn = '9999-12-31', mx = '2000-01-01';
   Object.keys(filtered).forEach(function(sn) {
     var d = filtered[sn];
-    var route = window.getRoute(sn, d);
+    var route = window.getRoute ? window.getRoute(sn, d) : [];
     route.forEach(function(proc) {
-      var p = window.getProc(d, proc);
-      var s = window.fD(p.actualStart) || window.fD(p.planStart);
-      var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
+      var p = window.getProc ? window.getProc(d, proc) : {};
+      var s = (window.fD ? window.fD(p.actualStart) : '') || (window.fD ? window.fD(p.planStart) : '');
+      var e = (window.fD ? window.fD(p.actualEnd) : '') || (window.fD ? window.fD(p.planEnd) : '');
       if (s && s < mn) mn = s;
       if (e && e > mx) mx = e;
     });
   });
-  if (mn > mx) { var t = new Date(); mn = t.toISOString().slice(0,10); mx = mn; }
+  // Fallback: if no valid dates found, use a 30-day window centred on today
+  var todayStr = new Date().toISOString().slice(0,10);
+  if (!mn || !mx || mn > mx || mn === '9999-12-31') {
+    var tBase = new Date();
+    tBase.setDate(tBase.getDate() - 7);
+    mn = tBase.toISOString().slice(0,10);
+    var tEnd = new Date();
+    tEnd.setDate(tEnd.getDate() + 23);
+    mx = tEnd.toISOString().slice(0,10);
+  }
   var ds = new Date(mn+'T00:00:00');
   ds.setDate(ds.getDate() - 7);
   var de = new Date(mx+'T00:00:00');
@@ -102,12 +111,14 @@ function toggleG(key) {
 window.toggleG = toggleG;
 
 function gMakeBar(sn, d, proc, dates) {
-  var p = window.getProc(d, proc);
-  var s = window.fD(p.actualStart) || window.fD(p.planStart);
-  var eAct = window.fD(p.actualEnd);
-  var ePlan = window.fD(p.planEnd);
+  var p = (window.getProc ? window.getProc(d, proc) : null) || {};
+  var s = (window.fD ? window.fD(p.actualStart) : '') || (window.fD ? window.fD(p.planStart) : '');
+  var eAct = window.fD ? window.fD(p.actualEnd) : '';
+  var ePlan = window.fD ? window.fD(p.planEnd) : '';
   var e = eAct || ePlan;
   if (!s || !e) return null;
+  // Ensure s <= e
+  if (s > e) { var tmp = s; s = e; e = tmp; }
   var status = p.status || '대기';
   var today = new Date().toISOString().slice(0,10);
   var x1 = dates.indexOf(s);
@@ -254,10 +265,11 @@ function gBuildBatch(filtered, dates) {
           });
           if (hasComp) sts = '완료';
           else if (hasProg) sts = '진행';
-          if (mn < '9999') {
+          if (mn < '9999' && mx > '2000' && mn <= mx) {
             var x1 = dates.indexOf(mn), x2 = dates.indexOf(mx);
             if (x1 < 0) x1 = 0;
             if (x2 < 0) x2 = dates.length - 1;
+            if (x2 < x1) x2 = x1;
             var bar = { x1:x1, x2:x2, proc:proc, status:sts, bid:bid, pname:pname,
               s:mn, e:mx, sn:items.length+'매' };
             var today = new Date().toISOString().slice(0,10);
@@ -320,10 +332,11 @@ function gBuildProduct(filtered, dates) {
           });
           if (hasComp) sts = '완료';
           else if (hasProg) sts = '진행';
-          if (mn < '9999') {
+          if (mn < '9999' && mx > '2000' && mn <= mx) {
             var x1 = dates.indexOf(mn), x2 = dates.indexOf(mx);
             if (x1 < 0) x1 = 0;
             if (x2 < 0) x2 = dates.length - 1;
+            if (x2 < x1) x2 = x1;
             var bar = { x1:x1, x2:x2, proc:proc, status:sts, bid:bid, pname:pname,
               s:mn, e:mx, sn:items.length+'매' };
             var today = new Date().toISOString().slice(0,10);

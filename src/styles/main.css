@@ -1605,3 +1605,354 @@ canvas { display: block; }
 
 /* === Gemini API 키 상태 === */
 #geminiKeyStatus { font-size: 12px; margin-top: 6px; min-height: 18px; }
+
+/* ============================================================
+   Phase 4 – Execution-First Home
+   home header · toolbar · date bar · sections · exec cards
+   ============================================================ */
+
+/* ── 홈 헤더 (컴팩트 한 줄) ── */
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 6px;
+  gap: 8px;
+}
+.home-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+.home-greet {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--t1);
+}
+.home-date-kpi {
+  font-size: 12px;
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-header-right {
+  flex-shrink: 0;
+}
+.home-tools-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r8);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--t2);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.home-tools-toggle:hover { background: var(--bg3); color: var(--t1); }
+
+/* ── 숨겨진 도구 툴바 ── */
+.home-tools-bar {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+/* ── 날짜 네비게이션 바 ── */
+.exec-date-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0 10px;
+  margin-bottom: 2px;
+}
+.exec-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r8);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--t2);
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.exec-nav-btn:hover { background: var(--ac1); color: #fff; border-color: var(--ac1); }
+.exec-date-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t1);
+  min-width: 160px;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+.exec-date-text.exec-date-today {
+  color: var(--ac1);
+}
+
+/* ── 섹션 ── */
+.exec-section {
+  margin-bottom: 16px;
+}
+.exec-section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+.exec-section-icon { font-size: 14px; }
+.exec-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--t2);
+}
+.exec-section-count {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg3);
+  color: var(--t2);
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-left: auto;
+}
+.exec-section-delayed .exec-section-title { color: var(--err); }
+.exec-section-delayed .exec-section-count { background: rgba(239,68,68,0.15); color: var(--err); }
+.exec-section-prog .exec-section-title { color: var(--ac1); }
+
+/* ── 빈 상태 ── */
+.exec-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--bg2);
+  border-radius: var(--r8);
+  border: 1px dashed var(--border);
+}
+.exec-empty-icon { font-size: 16px; color: var(--suc); }
+.exec-empty-msg { font-size: 13px; color: var(--t2); }
+
+.exec-cards { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── 실행 카드 ── */
+.exec-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r12);
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.exec-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.exec-card-delayed {
+  border-left: 4px solid var(--err);
+  background: rgba(239,68,68,0.04);
+}
+
+/* ── 카드 상단 헤더 ── */
+.exec-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  cursor: pointer;
+}
+.exec-card-proc-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.exec-card-proc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.exec-card-proc-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.exec-card-action { flex-shrink: 0; }
+
+/* ── 큰 액션 버튼 (≥44px) ── */
+.exec-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: var(--r8);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+  min-width: 80px;
+  justify-content: center;
+}
+.exec-action-btn:active { transform: scale(0.97); }
+.exec-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.exec-action-start {
+  background: var(--ac1);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.35);
+}
+.exec-action-start:hover { opacity: 0.9; }
+.exec-action-complete {
+  background: var(--suc);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(16,185,129,0.35);
+}
+.exec-action-complete:hover { opacity: 0.9; }
+.exec-action-done {
+  font-size: 12px;
+  color: var(--t2);
+  padding: 6px 10px;
+  background: var(--bg3);
+  border-radius: var(--r8);
+}
+
+/* ── 공정 파이프라인 바 ── */
+.exec-proc-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 14px 8px;
+}
+.exec-proc-pip {
+  width: 22px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg3);
+  transition: background 0.2s;
+}
+.exec-proc-pip-active {
+  height: 7px;
+  border-radius: 4px;
+}
+
+/* ── 카드 바디 ── */
+.exec-card-body {
+  padding: 0 14px 10px;
+  cursor: pointer;
+}
+.exec-card-product {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t1);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.exec-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 4px;
+  font-size: 11px;
+  color: var(--t2);
+}
+.exec-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.exec-meta-sep { color: var(--border); }
+.exec-sn-range {
+  font-family: monospace;
+  font-size: 11px;
+}
+
+/* ── 배지 ── */
+.exec-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.exec-badge-delay { background: rgba(239,68,68,0.15); color: var(--err); }
+.exec-badge-overdue { background: rgba(239,68,68,0.2); color: var(--err); }
+.exec-badge-today  { background: rgba(245,158,11,0.2); color: #d97706; }
+.exec-badge-urgent { background: rgba(245,158,11,0.15); color: #b45309; }
+.exec-badge-normal { background: var(--bg3); color: var(--t2); }
+
+/* ── S/N 펼침 목록 ── */
+.exec-sn-list {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  border-top: 0 solid var(--border);
+}
+.exec-sn-list.open {
+  max-height: 400px;
+  border-top-width: 1px;
+}
+.exec-sn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px 12px;
+}
+.exec-sn-item {
+  display: inline-block;
+  font-size: 11px;
+  font-family: monospace;
+  background: var(--bg3);
+  color: var(--t1);
+  border-radius: var(--r4);
+  padding: 3px 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.1s;
+}
+.exec-sn-item:hover { border-color: var(--ac1); color: var(--ac1); }
+
+/* ── 모바일 최적화 ── */
+@media (max-width: 480px) {
+  .exec-date-text { font-size: 13px; min-width: 140px; }
+  .exec-card-top { padding: 10px 12px 6px; }
+  .exec-card-body { padding: 0 12px 8px; }
+  .exec-proc-bar { padding: 0 12px 6px; }
+  .exec-action-btn { height: 44px; font-size: 13px; padding: 0 14px; }
+  .exec-card-product { font-size: 14px; }
+  .home-greet { font-size: 14px; }
+  .home-date-kpi { font-size: 11px; }
+}
+
+/* ── 태블릿 ── */
+@media (min-width: 769px) {
+  .exec-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* ── 데스크톱 ── */
+@media (min-width: 1280px) {
+  .exec-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
