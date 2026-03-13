@@ -131,14 +131,14 @@ function renderTaskCard(group, uid, isDelayed) {
   if (procStatus === '대기') {
     actionBtn = `
       <button class="exec-action-btn exec-action-start"
-        onclick="event.stopPropagation();window.quickStartTask('${cardId}',${snListJson},'${procEsc}')">
+        onclick="event.stopPropagation();window.quickStartTask('${cardId}',${snListJson.replace(/"/g, '&quot;')},'${procEsc}')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         시작
       </button>`;
   } else if (procStatus === '진행') {
     actionBtn = `
       <button class="exec-action-btn exec-action-complete"
-        onclick="event.stopPropagation();window.quickCompleteTask('${cardId}',${snListJson},'${procEsc}')">
+        onclick="event.stopPropagation();window.quickCompleteTask('${cardId}',${snListJson.replace(/"/g, '&quot;')},'${procEsc}')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
         완료
       </button>`;
@@ -290,7 +290,7 @@ window.quickStartTask = async function(cardId, snList, procName) {
   if (btn) { btn.disabled = true; btn.textContent = '처리중...'; }
 
   try {
-    const result = await startProcess(snList, procName);
+    const result = await startProcess(snList, procName, { source: 'home', user: window.currentUserEmail || 'unknown' });
     if (window.toast) window.toast(`${result.success}건 [${procName}] 시작`, 'success');
   } catch (err) {
     console.error('quickStartTask error:', err);
@@ -310,7 +310,7 @@ window.quickCompleteTask = async function(cardId, snList, procName) {
   if (btn) { btn.disabled = true; btn.textContent = '처리중...'; }
 
   try {
-    const result = await completeProcess(snList, procName);
+    const result = await completeProcess(snList, procName, { source: 'home', user: window.currentUserEmail || 'unknown' });
     if (window.toast) window.toast(`${result.success}건 [${procName}] 완료`, 'success');
   } catch (err) {
     console.error('quickCompleteTask error:', err);
