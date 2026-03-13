@@ -5,6 +5,7 @@ import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, 
 import { renderTodayView } from './today-view.js';
 import { renderSettings as _renderSettings } from './settings.js';
 import { renderAnalysis as _renderAnalysis, drawDonutChart as _drawDonutChart } from './analysis.js';
+import { startProcess, completeProcess, changeEquipment, changeCurrentProcess, setStatus, setStatusBatch } from './transition.js';
 
 // ===================================================
 // ESC Manager v10.0 - main.js
@@ -782,8 +783,7 @@ window.showProcDropdown = function(e, sn) {
       dd.remove();
       if (proc !== current) {
         try {
-          const ref = FB.doc(firebaseDb, 'production', sn);
-          await FB.updateDoc(ref, { currentProcess: proc });
+          await changeCurrentProcess(sn, proc);
           toast(`${sn} 현재공정 → ${proc}`, 'success');
         } catch (err) { handleFirestoreError(err, '공정 변경'); }
       }
@@ -852,8 +852,7 @@ window.showEquipDropdown = function(e, sn, proc) {
 
 async function updateEquip(sn, proc, equip) {
   try {
-    const ref = FB.doc(firebaseDb, 'production', sn);
-    await FB.updateDoc(ref, { [`processes.${proc}.equip`]: equip });
+    await changeEquipment(sn, proc, equip);
     toast(`${sn} ${proc} 설비 → ${equip || '해제'}`, 'success');
   } catch (err) { handleFirestoreError(err, '설비 변경'); }
 }
@@ -874,6 +873,7 @@ window.updateProcStartDate = async function(sn, proc, val) {
       updates[`processes.${proc}.status`] = '진행';
       updates[`processes.${proc}.actualStart`] = val;
     }
+    updates.updatedAt = FB.serverTimestamp();
     await FB.updateDoc(ref, updates);
     toast(`${sn} ${proc} 시작일 → ${fmt(val)} (종료: ${fmt(endDate)})`, 'success');
   } catch (err) { handleFirestoreError(err, '날짜 변경'); }
@@ -928,12 +928,7 @@ window.applyBatch = async function() {
   if (!status) { toast('상태를 선택하세요', 'warn'); return; }
   if (!S.wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
   try {
-    const batch = FB.writeBatch(firebaseDb);
-    S.wsSelection.forEach(sn => {
-      const ref = FB.doc(firebaseDb, 'production', sn);
-      batch.update(ref, { status });
-    });
-    await batch.commit();
+    await setStatusBatch([...S.wsSelection], status);
     toast(`${S.wsSelection.size}건 상태 → ${status}`, 'success');
     S.wsSelection.clear();
   } catch (err) { handleFirestoreError(err, '일괄 상태 변경'); }
@@ -943,12 +938,7 @@ window.applyNG = async function() {
   if (!S.wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
   if (!confirm(`${S.wsSelection.size}건을 NG(폐기) 처리하시겠습니까?`)) return;
   try {
-    const batch = FB.writeBatch(firebaseDb);
-    S.wsSelection.forEach(sn => {
-      const ref = FB.doc(firebaseDb, 'production', sn);
-      batch.update(ref, { status: '폐기' });
-    });
-    await batch.commit();
+    await setStatusBatch([...S.wsSelection], '폐기');
     toast(`${S.wsSelection.size}건 NG 처리 완료`, 'success');
     S.wsSelection.clear();
   } catch (err) { handleFirestoreError(err, 'NG 처리'); }
@@ -1668,10 +1658,7 @@ window.applySpStatus = async function() {
   if (!S.selectedSN) return;
   const status = document.getElementById('spStatusSel').value;
   try {
-    const ref = FB.doc(firebaseDb, 'production', S.selectedSN);
-    const updates = { status };
-    if (status === '완료') updates.completedAt = new Date().toISOString().slice(0, 10);
-    await FB.updateDoc(ref, updates);
+    await setStatus(S.selectedSN, status);
     toast(`${S.selectedSN} 상태 → ${status}`, 'success');
     window.openSidePanel(S.selectedSN);
   } catch (err) { handleFirestoreError(err, '상태 변경'); }
@@ -2100,7 +2087,7 @@ window.applyBatchAll = async function() {
       if (equip && proc) updates[`processes.${proc}.equip`] = equip;
       if (startDate && proc) updates[`processes.${proc}.planStart`] = startDate;
       if (endDate && proc) updates[`processes.${proc}.planEnd`] = endDate;
-      if (Object.keys(updates).length) wb.update(ref, updates);
+      if (Object.keys(updates).length) { updates.updatedAt = FB.serverTimestamp(); wb.update(ref, updates); }
     });
     await wb.commit();
     toast(`${S.wsSelection.size}건 일괄 적용 완료`, 'success');
@@ -2234,3 +2221,11 @@ window.getFiltered = function() {
   return result;
 };
 window.S = S;
+
+// === Phase 5: transition.js window 등록 ===
+window.startProcess = startProcess;
+window.completeProcess = completeProcess;
+window.changeEquipment = changeEquipment;
+window.changeCurrentProcess = changeCurrentProcess;
+window.setStatus = setStatus;
+window.setStatusBatch = setStatusBatch;
