@@ -112,10 +112,14 @@ window.toggleG = toggleG;
 
 function gMakeBar(sn, d, proc, dates) {
   var p = (window.getProc ? window.getProc(d, proc) : null) || {};
-  var s = (window.fD ? window.fD(p.actualStart) : '') || (window.fD ? window.fD(p.planStart) : '');
-  var eAct = window.fD ? window.fD(p.actualEnd) : '';
-  var ePlan = window.fD ? window.fD(p.planEnd) : '';
+  var fD = window.fD || function(v){return '';};
+  var s = fD(p.actualStart) || fD(p.planStart);
+  var eAct = fD(p.actualEnd);
+  var ePlan = fD(p.planEnd);
   var e = eAct || ePlan;
+  // planStart가 없으면 planEnd에서 3일 전으로 추정
+  if (!s && e) s = e;
+  // 여전히 시작일 없으면 포기
   if (!s || !e) return null;
   // Ensure s <= e
   if (s > e) { var tmp = s; s = e; e = tmp; }
@@ -161,11 +165,10 @@ function gBuildProcess(filtered, dates) {
     var equipAll = [];
     // 설비 목록 먼저 수집 (EQ_MAP에서)
     if (eqMap[proc]) {
-      Object.keys(eqMap[proc]).forEach(function(cat) {
-        (eqMap[proc][cat]||[]).forEach(function(eq) {
-          if (equipAll.indexOf(eq) < 0) equipAll.push(eq);
-          if (!equipMap[eq]) equipMap[eq] = [];
-        });
+      var eqList = Array.isArray(eqMap[proc]) ? eqMap[proc] : [];
+      eqList.forEach(function(eq) {
+        if (equipAll.indexOf(eq) < 0) equipAll.push(eq);
+        if (!equipMap[eq]) equipMap[eq] = [];
       });
     }
 
@@ -520,6 +523,28 @@ window.renderGantt = function renderGantt() {
   elSidebar.innerHTML = sbH;
   elBody.innerHTML = bH + todayLine;
   elBody.style.minWidth = totalW + 'px';
+
+  // 좌우 세로 스크롤 동기화
+  var sbEl = document.getElementById('ganttSidebar');
+  var bwEl = document.getElementById('ganttBodyWrap');
+  if (sbEl && bwEl) {
+    var syncing = false;
+    sbEl.onscroll = function() {
+      if (syncing) return;
+      syncing = true;
+      bwEl.scrollTop = sbEl.scrollTop;
+      syncing = false;
+    };
+    bwEl.onscroll = function() {
+      if (syncing) return;
+      syncing = true;
+      sbEl.scrollTop = bwEl.scrollTop;
+      // 헤더 가로 스크롤 동기화
+      var hEl = document.getElementById('ganttHeaderWrap');
+      if (hEl) hEl.scrollLeft = bwEl.scrollLeft;
+      syncing = false;
+    };
+  }
 
   // 오늘로 스크롤
   setTimeout(function(){ window.ganttGoToday(); }, 100);

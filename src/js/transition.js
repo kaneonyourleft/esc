@@ -17,13 +17,20 @@ const getFirebase = () => {
   return { ...window.FB, db: window.firebaseDb };
 };
 
+const getAuditFields = (fnName, options) => {
+    const FB = getFirebase();
+    return {
+        updatedAt: FB.serverTimestamp(),
+        updatedBy: options.user || 'unknown',
+        lastAction: fnName,
+        actionSource: options.source || 'unknown',
+    };
+};
+
 /**
  * 1. 공정 시작 (배치)
- * @param {string[]} snList - 대상 S/N 목록
- * @param {string} procName - 시작할 공정명
- * @returns {Promise<{success: number, failed: number}>}
  */
-export async function startProcess(snList, procName) {
+export async function startProcess(snList, procName, options = {}) {
   if (!snList || snList.length === 0) {
     return { success: 0, failed: 0 };
   }
@@ -32,6 +39,8 @@ export async function startProcess(snList, procName) {
 
   try {
     const batch = FB.writeBatch(FB.db);
+    const audit = getAuditFields('startProcess', options);
+
     snList.forEach(sn => {
       const ref = FB.doc(FB.db, 'production', sn);
       batch.update(ref, {
@@ -39,7 +48,7 @@ export async function startProcess(snList, procName) {
         [`processes.${procName}.actualStart`]: today,
         currentProcess: procName,
         status: '진행',
-        updatedAt: FB.serverTimestamp()
+        ...audit
       });
     });
 
@@ -53,11 +62,8 @@ export async function startProcess(snList, procName) {
 
 /**
  * 2. 공정 완료 (배치)
- * @param {string[]} snList - 대상 S/N 목록
- * @param {string} procName - 완료된 공정명
- * @returns {Promise<{success: number, failed: number}>}
  */
-export async function completeProcess(snList, procName) {
+export async function completeProcess(snList, procName, options = {}) {
   if (!snList || snList.length === 0) {
     return { success: 0, failed: 0 };
   }
@@ -66,6 +72,7 @@ export async function completeProcess(snList, procName) {
 
   try {
     const batch = FB.writeBatch(FB.db);
+    const audit = getAuditFields('completeProcess', options);
     let successCount = 0;
 
     for (const sn of snList) {
@@ -78,7 +85,7 @@ export async function completeProcess(snList, procName) {
       const updates = {
         [`processes.${procName}.status`]: '완료',
         [`processes.${procName}.actualEnd`]: today,
-        updatedAt: FB.serverTimestamp()
+        ...audit
       };
 
       const route = getRoute(sn, docData);
@@ -93,7 +100,7 @@ export async function completeProcess(snList, procName) {
 
       if (isLastProcess) {
         const allProcessesComplete = route.every(p => {
-          if (p === procName) return true; // 현재 공정은 이제 막 완료됨
+          if (p === procName) return true;
           const procData = getProc(docData, p);
           return procData && procData.status === '완료';
         });
@@ -122,17 +129,15 @@ export async function completeProcess(snList, procName) {
 
 /**
  * 3. 설비 변경
- * @param {string} sn - 대상 S/N
- * @param {string} procName - 대상 공정
- * @param {string} equipName - جديد 설비명
  */
-export async function changeEquipment(sn, procName, equipName) {
+export async function changeEquipment(sn, procName, equipName, options = {}) {
   const FB = getFirebase();
   try {
     const ref = FB.doc(FB.db, 'production', sn);
+    const audit = getAuditFields('changeEquipment', options);
     await FB.updateDoc(ref, {
       [`processes.${procName}.equip`]: equipName,
-      updatedAt: FB.serverTimestamp()
+      ...audit
     });
   } catch (error) {
     console.error(`Error changing equipment for ${sn}:`, error);
@@ -142,16 +147,15 @@ export async function changeEquipment(sn, procName, equipName) {
 
 /**
  * 4. 현재 공정 변경
- * @param {string} sn - 대상 S/N
- * @param {string} newProcName - جديد 현재 공정명
  */
-export async function changeCurrentProcess(sn, newProcName) {
+export async function changeCurrentProcess(sn, newProcName, options = {}) {
     const FB = getFirebase();
     try {
         const ref = FB.doc(FB.db, 'production', sn);
+        const audit = getAuditFields('changeCurrentProcess', options);
         await FB.updateDoc(ref, {
             currentProcess: newProcName,
-            updatedAt: FB.serverTimestamp()
+            ...audit
         });
     } catch (error) {
         console.error(`Error changing current process for ${sn}:`, error);
@@ -161,15 +165,14 @@ export async function changeCurrentProcess(sn, newProcName) {
 
 /**
  * 5. 개별 문서 상태 설정
- * @param {string} sn - 대상 S/N
- * @param {string} newStatus - جديد 상태값
  */
-export async function setStatus(sn, newStatus) {
+export async function setStatus(sn, newStatus, options = {}) {
     const FB = getFirebase();
     try {
+        const audit = getAuditFields('setStatus', options);
         const updates = {
             status: newStatus,
-            updatedAt: FB.serverTimestamp()
+            ...audit
         };
 
         if (newStatus === '완료') {
@@ -187,11 +190,8 @@ export async function setStatus(sn, newStatus) {
 
 /**
  * 6. 문서 상태 일괄 설정 (배치)
- * @param {string[]} snList - 대상 S/N 목록
- * @param {string} newStatus - جديد 상태값
- * @returns {Promise<{success: number, failed: number}>}
  */
-export async function setStatusBatch(snList, newStatus) {
+export async function setStatusBatch(snList, newStatus, options = {}) {
     if (!snList || snList.length === 0) {
         return { success: 0, failed: 0 };
     }
@@ -199,9 +199,10 @@ export async function setStatusBatch(snList, newStatus) {
 
     try {
         const batch = FB.writeBatch(FB.db);
+        const audit = getAuditFields('setStatusBatch', options);
         const updates = {
             status: newStatus,
-            updatedAt: FB.serverTimestamp()
+            ...audit
         };
 
         if (newStatus === '완료') {
@@ -218,6 +219,54 @@ export async function setStatusBatch(snList, newStatus) {
         return { success: snList.length, failed: 0 };
     } catch (error) {
         console.error('Error in setStatusBatch:', error);
+        throw error;
+    }
+}
+
+/**
+ * 7. 공정 폐기 (배치)
+ */
+export async function discardProcess(snList, procName, options = {}) {
+    if (!options.reason) {
+        throw new Error('폐기 사유 필수');
+    }
+    if (!snList || snList.length === 0) {
+        return { success: 0, failed: 0, skipped: 0 };
+    }
+    const FB = getFirebase();
+
+    try {
+        const batch = FB.writeBatch(FB.db);
+        const audit = getAuditFields('discardProcess', options);
+        let successCount = 0;
+        let skippedCount = 0;
+
+        snList.forEach(sn => {
+            const docData = S.DATA[sn];
+            if (!docData || docData.status === '폐기' || docData.status === '완료') {
+                skippedCount++;
+                return;
+            }
+
+            const ref = FB.doc(FB.db, 'production', sn);
+            batch.update(ref, {
+                status: '폐기',
+                [`processes.${procName}.status`]: '폐기',
+                ngReason: options.reason,
+                ngQty: options.qty || null,
+                discardedAt: FB.serverTimestamp(),
+                discardedBy: options.user || 'unknown',
+                discardedProcess: procName,
+                ...audit,
+            });
+            successCount++;
+        });
+
+        await batch.commit();
+        return { success: successCount, failed: 0, skipped: skippedCount };
+
+    } catch (error) {
+        console.error('Error in discardProcess:', error);
         throw error;
     }
 }
