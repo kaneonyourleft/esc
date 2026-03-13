@@ -254,8 +254,9 @@ function updateDataStats() {
     <div class="stat-item"><div class="stat-val">${counts['완료']}</div><div class="stat-lbl">완료</div></div>
     <div class="stat-item"><div class="stat-val">${counts['지연']}</div><div class="stat-lbl">지연</div></div>
   `;
-  // Update all dataStats containers (home tab + settings tab)
-  document.querySelectorAll('#dataStats').forEach(el => { el.innerHTML = html; });
+  // Update settings tab dataStats container
+  const settingsEl = document.getElementById('dataStatsSettings');
+  if (settingsEl) settingsEl.innerHTML = html;
 }
 
 function populateGanttProdFilter() {
@@ -336,26 +337,33 @@ window.toggleTheme = function() {
 function renderHome() {
   const now = new Date();
   const hour = now.getHours();
-  const greet = hour < 12 ? '좋은 아침입니다' : hour < 18 ? '좋은 오후입니다' : '좋은 저녁입니다';
-  const name = S.currentUser?.displayName || '사용자';
-  document.getElementById('greetMsg').textContent = `${greet}, ${name}님!`;
-  document.getElementById('greetSub').textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 — 현장 실행 중심 작업 현황`;
+  const greet = hour < 12 ? '좋은 아침' : hour < 18 ? '오후' : '저녁';
+  const name = S.currentUser?.displayName?.split(' ')[0] || '현장';
+  const delayed = Object.values(S.DATA).filter(d => (d.status || '대기') === '지연').length;
+  const inProg  = Object.values(S.DATA).filter(d => (d.status || '대기') === '진행').length;
 
-  const delayed = Object.entries(S.DATA).filter(([, d]) => (d.status || '대기') === '지연');
-  const alertCard = document.getElementById('delayAlertCard');
-  if (delayed.length > 0) {
-    alertCard.style.display = 'block';
-    document.getElementById('delayAlertMsg').textContent = `현재 ${delayed.length}건의 지연 LOT이 있습니다. 즉시 확인이 필요합니다.`;
-  } else {
-    alertCard.style.display = 'none';
+  // 컴팩트 한 줄 인사
+  const greetEl = document.getElementById('greetMsg');
+  if (greetEl) greetEl.textContent = `${greet} ${name}님`;
+
+  // KPI 한 줄 (진행 · 지연)
+  const subEl = document.getElementById('greetSub');
+  if (subEl) {
+    const mm = now.getMonth() + 1, dd = now.getDate();
+    const dow = ['일','월','화','수','목','금','토'][now.getDay()];
+    subEl.innerHTML = `${mm}/${dd}(${dow}) &nbsp;진행 <strong>${inProg}</strong>&nbsp; 지연 <strong style="color:var(--err)">${delayed}</strong>`;
   }
 
-  // 모닝 브리핑 카드 삽입
-  renderBriefingCard();
-  
-  // 기존 위젯 대신 오늘 할 일 뷰 렌더링
+  // 오늘 할 일 실행 뷰
   renderTodayView();
 }
+
+window.toggleHomeTools = function() {
+  const bar = document.getElementById('homeToolsBar');
+  if (!bar) return;
+  const visible = bar.style.display !== 'none';
+  bar.style.display = visible ? 'none' : 'flex';
+};
 
 function renderBriefingCard() {
   const container = document.getElementById('briefingContainer');
