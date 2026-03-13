@@ -307,23 +307,12 @@
 
         <!-- 설정 탭 -->
         <div class="tab-content" id="settingsTab" style="display:none">
-          <div class="setting-section">
-            <div class="setting-title">👤 계정 정보</div>
-            <div class="setting-row">
-              <div>
-                <div style="font-size:14px;font-weight:500" id="settingName">사용자</div>
-                <div style="font-size:12px;color:var(--t2)" id="settingEmail"></div>
-              </div>
-              <button class="btn btn-danger btn-sm" onclick="doLogout()">로그아웃</button>
-            </div>
+          <!-- hidden anchors kept for setupAuth() -->
+          <div style="display:none">
+            <span id="settingName"></span>
+            <span id="settingEmail"></span>
           </div>
-          <div class="setting-section">
-            <div class="setting-title">🎨 테마</div>
-            <div class="setting-row">
-              <span>다크 모드</span>
-              <div class="toggle" id="themeToggle" onclick="toggleTheme()"></div>
-            </div>
-          </div>
+          <!-- static always-visible section -->
           <div class="setting-section">
             <div class="setting-title">🤖 Gemini AI 설정</div>
             <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -334,8 +323,10 @@
           </div>
           <div class="setting-section">
             <div class="setting-title">📊 데이터 현황</div>
-            <div id="dataStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
+            <div id="dataStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:0"></div>
           </div>
+          <!-- dynamic content injected by settings.js renderSettings() -->
+          <div id="settingsContent"></div>
         </div>
 
       </div><!-- /content -->
@@ -683,7 +674,6 @@
         <button class="btn btn-secondary" onclick="resetWidgetConfig()">기본값 복원</button>
         <button class="btn btn-primary" onclick="saveWidgetConfig()">저장</button>
       </div>
-      </div> <!-- /pm_formView -->
     </div>
   </div>
 

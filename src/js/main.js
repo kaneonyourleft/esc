@@ -4,6 +4,7 @@ import { handleFirestoreError, toast, openModal, closeModal, statusBadge, esc } 
 import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, getEquipList, calcProgress, extractCategory, extractBatchFromSN, positionDropdown, handleEmptyChart, mdToHtml } from './utils.js';
 import { renderTodayView } from './today-view.js';
 import { renderSettings as _renderSettings } from './settings.js';
+import { renderAnalysis as _renderAnalysis, drawDonutChart as _drawDonutChart } from './analysis.js';
 
 // ===================================================
 // ESC Manager v10.0 - main.js
@@ -197,6 +198,7 @@ function subscribeData() {
     snap.forEach(d => { newData[d.id] = d.data(); });
     S.set('DATA', newData);
     console.log(`📋 production: ${Object.keys(S.DATA).length} records`);
+    populateGanttProdFilter();
     onDataChanged();
     updateDataStats();
   }, (err) => { handleFirestoreError(err, '데이터 로드'); }));
@@ -240,20 +242,32 @@ function populateProductSelects() {
 }
 
 function updateDataStats() {
-  const el = document.getElementById('dataStats');
-  if (!el) return;
   const total = Object.keys(S.DATA).length;
   const counts = { '대기': 0, '진행': 0, '완료': 0, '지연': 0, '폐기': 0 };
   Object.values(S.DATA).forEach(d => {
     const s = d.status || '대기';
     if (counts[s] !== undefined) counts[s]++;
   });
-  el.innerHTML = `
+  const html = `
     <div class="stat-item"><div class="stat-val">${total}</div><div class="stat-lbl">전체 LOT</div></div>
     <div class="stat-item"><div class="stat-val">${counts['진행']}</div><div class="stat-lbl">진행중</div></div>
     <div class="stat-item"><div class="stat-val">${counts['완료']}</div><div class="stat-lbl">완료</div></div>
     <div class="stat-item"><div class="stat-val">${counts['지연']}</div><div class="stat-lbl">지연</div></div>
   `;
+  // Update all dataStats containers (home tab + settings tab)
+  document.querySelectorAll('#dataStats').forEach(el => { el.innerHTML = html; });
+}
+
+function populateGanttProdFilter() {
+  const sel = document.getElementById('ganttProdFilter');
+  if (!sel) return;
+  const prev = sel.value;
+  const prods = new Set();
+  Object.values(S.DATA).forEach(d => { if (d.productName) prods.add(d.productName); });
+  const opts = '<option value="">전체 제품</option>' +
+    [...prods].sort().map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  sel.innerHTML = opts;
+  if (prev && prods.has(prev)) sel.value = prev;
 }
 
 // === 탭 전환 ===
@@ -415,7 +429,11 @@ function renderWidgets() {
     }
   });
   container.innerHTML = html;
-  if (document.getElementById('homeDonut')) drawDonutChart('homeDonut');
+  if (document.getElementById('homeDonut')) {
+    const hCounts = { 대기: 0, 진행: 0, 완료: 0, 지연: 0, 폐기: 0 };
+    Object.values(S.DATA).forEach(d => { const s = d.status || '대기'; if (hCounts[s] !== undefined) hCounts[s]++; });
+    _drawDonutChart('homeDonut', hCounts);
+  }
   if (document.getElementById('homeWeekly')) drawWeeklyChart('homeWeekly');
 }
 
@@ -1324,27 +1342,9 @@ if (!window.saveGeminiKey) {
   };
 }
 
-// === 분석 탭 ===
+// === 분석 탭 — analysis.js에 위임 ===
 function renderAnalysis() {
-  const kpiEl = document.getElementById('analysisKpi');
-  if (kpiEl) {
-    const total = Object.keys(S.DATA).length;
-    let done = 0, prog = 0, delay = 0;
-    Object.values(S.DATA).forEach(d => {
-      const s = d.status || '대기';
-      if (s === '완료') done++;
-      if (s === '진행') prog++;
-      if (s === '지연') delay++;
-    });
-    const rate = total ? Math.round(done / total * 100) : 0;
-    kpiEl.innerHTML = `
-      <div class="kpi-card"><div class="kpi-val">${total}</div><div class="kpi-lbl">전체</div></div>
-      <div class="kpi-card"><div class="kpi-val" style="color:var(--ac2)">${prog}</div><div class="kpi-lbl">진행</div></div>
-      <div class="kpi-card"><div class="kpi-val" style="color:var(--suc)">${rate}%</div><div class="kpi-lbl">완료율</div></div>
-      <div class="kpi-card"><div class="kpi-val" style="color:var(--err)">${delay}</div><div class="kpi-lbl">지연</div></div>
-    `;
-  }
-  renderAllCharts();
+  _renderAnalysis();
 }
 
 function renderAllCharts() {
@@ -1355,8 +1355,10 @@ function renderAllCharts() {
     return { labels: Object.keys(counts), values: Object.values(counts), color: '#6366f1' };
   });
 
-  // 상태 도넛
-  drawDonutChart('analysisDonut');
+  // 상태 도넛 (analysis.js의 drawDonutChart 사용)
+  const counts2 = { 대기: 0, 진행: 0, 완료: 0, 지연: 0, 폐기: 0 };
+  Object.values(S.DATA).forEach(d => { const s = d.status || '대기'; if (counts2[s] !== undefined) counts2[s]++; });
+  _drawDonutChart('analysisDonut', counts2);
 
   // 월별 투입/완료
   drawBarChart('monthLineChart', () => {
@@ -1497,67 +1499,7 @@ function drawBarChart(canvasId, dataFn) {
   }
 }
 
-function drawDonutChart(canvasId) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-
-  let counts = { '대기': 0, '진행': 0, '완료': 0, '지연': 0, '폐기': 0 };
-  Object.values(S.DATA).forEach(d => {
-    const s = d.status || '대기';
-    if (counts[s] !== undefined) counts[s]++;
-  });
-
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  if (handleEmptyChart(canvas, total === 0 ? [] : counts, 'LOT 데이터가 없습니다')) return;
-
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width = canvas.parentElement.clientWidth - 32;
-  const h = canvas.height = 240;
-  ctx.clearRect(0, 0, w, h);
-
-  const colorMap = { '대기': '#64748b', '진행': '#6366f1', '완료': '#10b981', '지연': '#ef4444', '폐기': '#71717a' };
-  const cx = w / 2, cy = h / 2 - 10;
-  const outerR = Math.min(w, h) / 2 - 40;
-  const innerR = outerR * 0.55;
-
-  let angle = -Math.PI / 2;
-  Object.entries(counts).forEach(([status, count]) => {
-    if (!count) return;
-    const slice = count / total * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, outerR, angle, angle + slice);
-    ctx.closePath();
-    ctx.fillStyle = colorMap[status] || '#666';
-    ctx.fill();
-    angle += slice;
-  });
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg2').trim() || '#0f1629';
-  ctx.fill();
-
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--t1').trim() || '#fff';
-  ctx.font = 'bold 20px Noto Sans KR';
-  ctx.textAlign = 'center';
-  ctx.fillText(total, cx, cy + 2);
-  ctx.font = '12px Noto Sans KR';
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--t2').trim() || '#999';
-  ctx.fillText('전체', cx, cy + 18);
-
-  let lx = 10, ly = h - 18;
-  Object.entries(counts).forEach(([status, count]) => {
-    if (!count) return;
-    ctx.fillStyle = colorMap[status];
-    ctx.fillRect(lx, ly, 10, 10);
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--t2').trim() || '#999';
-    ctx.font = '11px Noto Sans KR';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${status} ${count}`, lx + 14, ly + 9);
-    lx += ctx.measureText(`${status} ${count}`).width + 24;
-  });
-}
+// drawDonutChart moved to analysis.js — use _drawDonutChart() imported above
 
 function drawWeeklyChart(canvasId) {
   const canvas = document.getElementById(canvasId);
@@ -1628,6 +1570,614 @@ function drawWeeklyChart(canvasId) {
   ctx.fillText('완료', w - 46, 17);
 }
 
+// ===================================================
+// 사이드 패널 (openSidePanel / closeSidePanel)
+// ===================================================
+window.openSidePanel = function(sn) {
+  S.set('selectedSN', sn);
+  const d = S.DATA[sn];
+  if (!d) { toast('데이터를 찾을 수 없습니다', 'error'); return; }
+
+  document.getElementById('spSN').textContent = sn;
+  document.getElementById('spBadge').innerHTML = statusBadge(d.status || '대기');
+  document.getElementById('spCat').textContent = extractCategory(sn);
+  document.getElementById('spStatusSel').value = d.status || '대기';
+
+  const body = document.getElementById('spBody');
+  const route = getRoute(sn, d);
+  const progress = calcProgress(d, sn);
+
+  let html = `
+    <div class="sp-section">
+      <div class="sp-label">진행률</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:8px;background:var(--bg4);border-radius:4px;overflow:hidden">
+          <div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : 'var(--ac2)'};border-radius:4px;transition:width 0.3s"></div>
+        </div>
+        <span style="font-size:13px;font-weight:600">${progress}%</span>
+      </div>
+    </div>
+    <div class="sp-section">
+      <div class="sp-label">기본 정보</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        <div>제품: <strong>${esc(d.productName || '-')}</strong></div>
+        <div>카테고리: <strong>${esc(extractCategory(sn))}</strong></div>
+        <div>시작일: <strong>${fmt(fD(d.startDate || d.createdAt))}</strong></div>
+        <div>납기: <strong>${fmt(fD(d.endDate))}</strong></div>
+        <div>고객: <strong>${esc(d.customer || '-')}</strong></div>
+        <div>배치: <strong>${esc(d.batch || d.batchId || '-')}</strong></div>
+      </div>
+    </div>
+    <div class="sp-section">
+      <div class="sp-label">공정 현황</div>
+      <div>`;
+
+  route.forEach((proc, idx) => {
+    const p = getProc(d, proc);
+    const st = p.status || '대기';
+    const color = PROC_COLORS[proc] || '#666';
+    const isCurrent = proc === (d.currentProcess || route[0]);
+    html += `<div style="padding:8px 10px;margin-bottom:6px;border-radius:8px;border-left:3px solid ${color};background:${isCurrent ? 'rgba(99,102,241,0.08)' : 'var(--bg4)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-weight:600;font-size:13px;color:${color}">${idx + 1}. ${esc(proc)}</span>
+        ${statusBadge(st)}
+      </div>
+      <div style="font-size:11px;color:var(--t2);display:grid;grid-template-columns:1fr 1fr;gap:2px">
+        <div>설비: ${esc(p.equip || '-')}</div>
+        <div>계획: ${p.planDays || '-'}일</div>
+        <div>시작: ${fmt(fD(p.planStart || p.actualStart))}</div>
+        <div>종료: ${fmt(fD(p.actualEnd || p.planEnd))}</div>
+        <div>실적: ${p.actualDays || '-'}일</div>
+        <div>불량: ${esc(p.defect || '-')}</div>
+      </div>
+      ${p.remark ? `<div style="font-size:11px;color:var(--t2);margin-top:3px">📝 ${esc(p.remark)}</div>` : ''}
+    </div>`;
+  });
+  html += '</div></div>';
+
+  const snIssues = S.ISSUES.filter(i => i.sn === sn);
+  if (snIssues.length) {
+    html += `<div class="sp-section"><div class="sp-label">이슈 (${snIssues.length})</div>`;
+    snIssues.forEach(issue => {
+      html += `<div style="padding:6px 8px;margin-bottom:4px;background:rgba(239,68,68,0.06);border-radius:6px;font-size:12px">
+        <div style="display:flex;justify-content:space-between"><span class="badge badge-delay" style="font-size:10px">${esc(issue.type || '기타')}</span><span style="color:var(--t2);font-size:10px">${fmt(fD(issue.date))}</span></div>
+        <div style="margin-top:3px">${esc(issue.content || '')}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
+  document.getElementById('sidePanel').classList.add('open');
+};
+
+window.closeSidePanel = function() {
+  document.getElementById('sidePanel').classList.remove('open');
+  S.set('selectedSN', null);
+};
+
+window.applySpStatus = async function() {
+  if (!S.selectedSN) return;
+  const status = document.getElementById('spStatusSel').value;
+  try {
+    const ref = FB.doc(firebaseDb, 'production', S.selectedSN);
+    const updates = { status };
+    if (status === '완료') updates.completedAt = new Date().toISOString().slice(0, 10);
+    await FB.updateDoc(ref, updates);
+    toast(`${S.selectedSN} 상태 → ${status}`, 'success');
+    window.openSidePanel(S.selectedSN);
+  } catch (err) { handleFirestoreError(err, '상태 변경'); }
+};
+
+window.deleteSN = async function() {
+  if (!S.selectedSN) return;
+  if (!confirm(`${S.selectedSN}을(를) 삭제하시겠습니까?`)) return;
+  try {
+    await FB.deleteDoc(FB.doc(firebaseDb, 'production', S.selectedSN));
+    toast(`${S.selectedSN} 삭제됨`, 'success');
+    window.closeSidePanel();
+  } catch (err) { handleFirestoreError(err, 'LOT 삭제'); }
+};
+
+window.showSNQR = function() {
+  if (!S.selectedSN) { toast('S/N을 먼저 선택하세요', 'warn'); return; }
+  const sn = S.selectedSN;
+  const url = location.origin + location.pathname + '#sn=' + encodeURIComponent(sn);
+  const snLabel = document.getElementById('qrSNLabel');
+  if (snLabel) snLabel.textContent = sn;
+  const wrap = document.getElementById('qrCanvasWrap');
+  if (wrap) {
+    wrap.innerHTML = '<canvas id="qrCanvas"></canvas>';
+    if (typeof QRCode !== 'undefined') {
+      QRCode.toCanvas(document.getElementById('qrCanvas'), url, { width: 200, margin: 2 }, err => {
+        if (err) console.error(err);
+      });
+    } else {
+      wrap.innerHTML = '<div style="color:var(--err)">QR 라이브러리 로딩 실패</div>';
+    }
+  }
+  openModal('qrModal');
+};
+
+window.downloadQR = function() {
+  const canvas = document.getElementById('qrCanvas');
+  if (!canvas) return;
+  const link = document.createElement('a');
+  link.download = `QR_${S.selectedSN || 'unknown'}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  toast('QR 다운로드 완료', 'success');
+};
+
+window.toggleMiniChat = function() {
+  S.set('miniChatOpen', !S.miniChatOpen);
+  const win = document.getElementById('miniChatWin');
+  if (win) win.style.display = S.miniChatOpen ? 'flex' : 'none';
+};
+
+// internal alias used in closeSidePanel call sites before window registration
+function closeSidePanel() { window.closeSidePanel(); }
+function openSidePanel(sn) { window.openSidePanel(sn); }
+
+// ===================================================
+// 모달 / 보고서 / 납기 역산 / 위젯 설정
+// ===================================================
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+window.openReportModal = function() {
+  const today = todayStr();
+  const total = Object.keys(S.DATA).length;
+  const counts = { '대기': 0, '진행': 0, '완료': 0, '지연': 0, '폐기': 0 };
+  Object.values(S.DATA).forEach(d => { const s = d.status || '대기'; if (counts[s] !== undefined) counts[s]++; });
+  let todayItems = [];
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    getRoute(sn, d).forEach(proc => {
+      const p = getProc(d, proc);
+      if (fD(p.planStart) === today || fD(p.actualStart) === today || fD(p.actualEnd) === today) {
+        todayItems.push(`${sn} / ${proc} / ${p.status || '대기'}`);
+      }
+    });
+  });
+  const content = `
+    <h3>📊 일일 생산 보고서</h3>
+    <p><strong>날짜:</strong> ${fmt(today)}</p>
+    <p><strong>전체 LOT:</strong> ${total}건</p>
+    <p>대기: ${counts['대기']} | 진행: ${counts['진행']} | 완료: ${counts['완료']} | 지연: ${counts['지연']} | 폐기: ${counts['폐기']}</p>
+    <h4>오늘 작업 내역 (${todayItems.length}건)</h4>
+    ${todayItems.length ? todayItems.map(i => `<p style="font-size:12px">• ${esc(i)}</p>`).join('') : '<p style="font-size:12px;color:var(--t2)">오늘 작업 내역 없음</p>'}
+    <h4>지연 현황 (${counts['지연']}건)</h4>
+    ${Object.entries(S.DATA).filter(([, d]) => (d.status || '대기') === '지연').map(([sn]) => `<p style="font-size:12px">⚠️ ${esc(sn)}</p>`).join('') || '<p style="font-size:12px;color:var(--t2)">지연 없음</p>'}
+  `;
+  const rc = document.getElementById('reportContent');
+  if (rc) rc.innerHTML = content;
+  openModal('reportModal');
+};
+
+window.copyReport = function() {
+  const el = document.getElementById('reportContent');
+  if (el) navigator.clipboard.writeText(el.innerText)
+    .then(() => toast('보고서 복사됨', 'success')).catch(() => toast('복사 실패', 'error'));
+};
+
+window.openDeadlineCalc = function() {
+  populateProductSelects();
+  openModal('deadlineModal');
+};
+
+window.calcDeadline = function() {
+  const prodId = document.getElementById('dl_prod')?.value;
+  const dueDate = document.getElementById('dl_due')?.value;
+  const result = document.getElementById('dl_result');
+  const snBtn = document.getElementById('dl_snBtn');
+  if (!prodId || !dueDate) { if (result) result.innerHTML = ''; if (snBtn) snBtn.style.display = 'none'; return; }
+  const prod = S.PRODUCTS[prodId];
+  if (!prod) { if (result) result.innerHTML = '<div style="color:var(--err)">제품 정보 없음</div>'; return; }
+  const cat = prod.category || 'WN';
+  const heat = prod.heat || 'N';
+  const route = buildRoute(cat, heat);
+  let html = '<div class="card" style="margin:0"><div class="card-title">역산 결과</div>';
+  html += '<table class="table"><thead><tr><th>공정</th><th>소요일</th><th>시작일</th><th>종료일</th></tr></thead><tbody>';
+  let cursor = dueDate;
+  let schedule = [];
+  for (let i = route.length - 1; i >= 0; i--) {
+    const proc = route[i];
+    const days = getDefaultDays(proc, cat);
+    const end = cursor;
+    const start = addBD(end, -days) || end;
+    schedule.unshift({ proc, days, start, end });
+    cursor = start;
+  }
+  schedule.forEach(s => {
+    html += `<tr><td><span style="color:${PROC_COLORS[s.proc] || '#666'};font-weight:600">${esc(s.proc)}</span></td><td>${s.days}일</td><td>${fmt(s.start)}</td><td>${fmt(s.end)}</td></tr>`;
+  });
+  html += `</tbody></table><div style="margin-top:8px;font-size:13px;font-weight:600">👉 투입 시작일: <span style="color:var(--ac2)">${fmt(schedule[0]?.start)}</span></div></div>`;
+  if (result) result.innerHTML = html;
+  if (snBtn) { snBtn.style.display = 'inline-flex'; snBtn.dataset.prod = prodId; snBtn.dataset.start = schedule[0]?.start || ''; }
+};
+
+window.deadlineToSN = function() {
+  const btn = document.getElementById('dl_snBtn');
+  closeModal('deadlineModal');
+  window.openSNModal();
+  setTimeout(() => {
+    const sp = document.getElementById('sn_prod');
+    const ss = document.getElementById('sn_start');
+    if (sp) sp.value = btn?.dataset.prod || '';
+    if (ss) ss.value = btn?.dataset.start || '';
+    if (window.onSNProdChange) window.onSNProdChange();
+    if (window.updateSNPreview) window.updateSNPreview();
+  }, 100);
+};
+
+window.openWidgetSettings = function() {
+  const widgets = getWidgets();
+  const list = document.getElementById('widgetSettingsList');
+  if (!list) return;
+  list.innerHTML = widgets.map((w, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" ${w.enabled ? 'checked' : ''} onchange="window.widgetToggle(${i},this.checked)">
+      <span style="flex:1;font-size:13px">${esc(w.name)}</span>
+      <button class="btn btn-secondary btn-sm" onclick="window.widgetMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.widgetMove(${i},1)" ${i === widgets.length - 1 ? 'disabled' : ''}>↓</button>
+    </div>
+  `).join('');
+  openModal('widgetModal');
+};
+
+window.widgetToggle = function(idx, checked) {
+  const w = getWidgets(); w[idx].enabled = checked; saveWidgets(w);
+};
+
+window.widgetMove = function(idx, dir) {
+  const w = getWidgets(); const target = idx + dir;
+  if (target < 0 || target >= w.length) return;
+  [w[idx], w[target]] = [w[target], w[idx]];
+  saveWidgets(w);
+  window.openWidgetSettings();
+};
+
+window.saveWidgetConfig = function() {
+  closeModal('widgetModal'); renderHome(); toast('위젯 설정 저장됨', 'success');
+};
+
+window.resetWidgetConfig = function() {
+  S.set('widgetCache', null); localStorage.removeItem('esc_widgets');
+  window.openWidgetSettings(); toast('기본값 복원', 'info');
+};
+
+// ===================================================
+// S/N 생성 모달
+// ===================================================
+window.openSNModal = function() {
+  populateProductSelects();
+  const startEl = document.getElementById('sn_start');
+  if (startEl) startEl.value = todayStr();
+  const batches = new Set();
+  Object.values(S.DATA).forEach(d => { if (d.batch) batches.add(d.batch); });
+  const list = document.getElementById('batchList');
+  if (list) list.innerHTML = [...batches].map(b => `<option value="${esc(b)}">`).join('');
+  openModal('snModal');
+};
+
+window.autoBatchCode = function() {
+  const now = new Date();
+  const code = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 900) + 100)}`;
+  const el = document.getElementById('sn_batch');
+  if (el) el.value = code;
+  if (window.updateSNPreview) window.updateSNPreview();
+};
+
+window.onSNProdChange = function() {
+  const prodId = document.getElementById('sn_prod')?.value;
+  const prod = S.PRODUCTS[prodId];
+  if (!prod) return;
+  const cat = prod.category || 'WN';
+  const equipSel = document.getElementById('sn_equip');
+  if (equipSel) {
+    const eqList = getEquipList(PROC_ORDER[0], cat);
+    equipSel.innerHTML = '<option value="">선택...</option>' + eqList.map(eq => `<option value="${esc(eq)}">${esc(eq)}</option>`).join('');
+  }
+  const hint = document.getElementById('sn_seqHint');
+  if (hint) {
+    const existing = Object.keys(S.DATA).filter(sn => sn.toUpperCase().startsWith(cat.toUpperCase()));
+    hint.textContent = `현재 ${cat} 시리즈: ${existing.length}건`;
+  }
+  if (window.updateSNPreview) window.updateSNPreview();
+};
+
+window.onSheetNoChange = function() { if (window.updateSNPreview) window.updateSNPreview(); };
+
+window.updateSNPreview = function() {
+  const sheet = document.getElementById('sn_sheet')?.value.trim() || '';
+  const prodId = document.getElementById('sn_prod')?.value || '';
+  const qty = parseInt(document.getElementById('sn_qty')?.value) || 1;
+  const seq = parseInt(document.getElementById('sn_seq')?.value) || 1;
+  const prod = S.PRODUCTS[prodId];
+  const preview = document.getElementById('sn_preview');
+  if (!preview) return;
+  if (!prod || !sheet) { preview.textContent = '제품과 시트번호를 입력하세요'; return; }
+  const cat = prod.category || 'WN';
+  const name = (prod.name || '').replace(/\s/g, '');
+  let items = [];
+  for (let i = 0; i < Math.min(qty, 50); i++) {
+    const num = String(seq + i).padStart(3, '0');
+    items.push(`${cat}${sheet}-${num}-${name}`);
+  }
+  preview.innerHTML = items.map(s => `<div>${esc(s)}</div>`).join('');
+};
+
+window.saveSNBatch = async function() {
+  const batch = document.getElementById('sn_batch')?.value.trim() || '';
+  const sheet = document.getElementById('sn_sheet')?.value.trim() || '';
+  const prodId = document.getElementById('sn_prod')?.value || '';
+  const qty = parseInt(document.getElementById('sn_qty')?.value) || 1;
+  const seq = parseInt(document.getElementById('sn_seq')?.value) || 1;
+  const startDate = document.getElementById('sn_start')?.value || '';
+  const equip = document.getElementById('sn_equip')?.value || '';
+  const prod = S.PRODUCTS[prodId];
+  if (!prod || !sheet || !batch) { toast('필수 항목을 입력하세요', 'warn'); return; }
+  if (!startDate) { toast('시작일을 입력하세요', 'warn'); return; }
+  const cat = prod.category || 'WN';
+  const heat = prod.heat || 'N';
+  const route = buildRoute(cat, heat);
+  const name = (prod.name || '').replace(/\s/g, '');
+  try {
+    const wb = FB.writeBatch(firebaseDb);
+    for (let i = 0; i < qty; i++) {
+      const num = String(seq + i).padStart(3, '0');
+      const sn = `${cat}${sheet}-${num}-${name}`;
+      const processes = {};
+      let cursor = startDate;
+      route.forEach((proc, idx) => {
+        const days = getDefaultDays(proc, cat);
+        const end = addBD(cursor, days);
+        processes[proc] = {
+          status: idx === 0 ? '진행' : '대기',
+          planStart: cursor, planEnd: end, planDays: days,
+          actualStart: idx === 0 ? cursor : '', actualEnd: '', actualDays: 0,
+          equip: idx === 0 ? equip : '', defect: '', remark: ''
+        };
+        cursor = end;
+      });
+      const ref = FB.doc(firebaseDb, 'production', sn);
+      wb.set(ref, {
+        sn, productName: prod.name, category: cat, customer: prod.customer || '',
+        batch, route, processes, startDate, endDate: cursor,
+        status: '진행', currentProcess: route[0], createdAt: todayStr(), heat
+      });
+    }
+    await wb.commit();
+    toast(`${qty}건 S/N 생성 완료`, 'success');
+    closeModal('snModal');
+  } catch (err) { handleFirestoreError(err, 'S/N 생성'); }
+};
+
+// ===================================================
+// 이슈 등록 모달
+// ===================================================
+window.openIssueModal = function(sn) {
+  const dateEl = document.getElementById('is_date');
+  const snEl = document.getElementById('is_sn');
+  const contentEl = document.getElementById('is_content');
+  if (dateEl) dateEl.value = todayStr();
+  if (snEl) snEl.value = sn || '';
+  if (contentEl) contentEl.value = '';
+  populateProductSelects();
+  openModal('issueModal');
+};
+
+window.saveIssue = async function() {
+  const date = document.getElementById('is_date')?.value || todayStr();
+  const type = document.getElementById('is_type')?.value || '기타';
+  const sn = document.getElementById('is_sn')?.value.trim() || '';
+  const content = document.getElementById('is_content')?.value.trim() || '';
+  if (!content) { toast('이슈 내용을 입력하세요', 'warn'); return; }
+  try {
+    const id = `ISS-${Date.now()}`;
+    const ref = FB.doc(firebaseDb, 'issues', id);
+    await FB.setDoc(ref, { date, type, sn, content, createdAt: todayStr(), createdBy: S.currentUser?.email || '' });
+    toast('이슈 등록 완료', 'success');
+    closeModal('issueModal');
+  } catch (err) { handleFirestoreError(err, '이슈 등록'); }
+};
+
+// ===================================================
+// 제품 등록 모달
+// ===================================================
+window.openProductModal = function() {
+  window.showProductList();
+  openModal('productModal');
+};
+
+window.showProductList = function() {
+  const listView = document.getElementById('pm_listView');
+  const formView = document.getElementById('pm_formView');
+  if (listView) listView.style.display = 'block';
+  if (formView) formView.style.display = 'none';
+  const countEl = document.getElementById('pm_count');
+  if (countEl) countEl.textContent = Object.keys(S.PRODUCTS).length;
+  const listEl = document.getElementById('pm_productList');
+  if (!listEl) return;
+  const prods = Object.values(S.PRODUCTS);
+  if (!prods.length) { listEl.innerHTML = '<div style="color:var(--t2);font-size:12px;padding:12px">등록된 제품이 없습니다</div>'; return; }
+  listEl.innerHTML = prods.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="flex:1"><strong>${esc(p.name)}</strong> <span style="color:var(--t2);font-size:11px">${esc(p.category || '')} | ${esc(p.customer || '-')}</span></span>
+      <button class="btn btn-secondary btn-sm" onclick="window.editProduct('${esc(p.name)}')">편집</button>
+    </div>`).join('');
+};
+
+window.showProductForm = function() {
+  const listView = document.getElementById('pm_listView');
+  const formView = document.getElementById('pm_formView');
+  if (listView) listView.style.display = 'none';
+  if (formView) formView.style.display = 'block';
+  const editMode = document.getElementById('pm_editMode');
+  if (editMode) editMode.value = '';
+  const nameEl = document.getElementById('pm_name');
+  if (nameEl) { nameEl.value = ''; nameEl.disabled = false; }
+  window.previewRoute && window.previewRoute();
+};
+
+window.editProduct = function(name) {
+  const prod = S.PRODUCTS[name];
+  if (!prod) return;
+  const listView = document.getElementById('pm_listView');
+  const formView = document.getElementById('pm_formView');
+  if (listView) listView.style.display = 'none';
+  if (formView) formView.style.display = 'block';
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  setVal('pm_editMode', 'edit');
+  setVal('pm_origName', name);
+  setVal('pm_name', prod.name || '');
+  setVal('pm_cat', prod.category || 'WN');
+  setVal('pm_heat', prod.heat || 'N');
+  setVal('pm_drawing', prod.drawing || '');
+  setVal('pm_shrink', prod.shrink || '0');
+  setVal('pm_stack', prod.stack || '0');
+  setVal('pm_joint', prod.joint || '');
+  const nameEl = document.getElementById('pm_name');
+  if (nameEl) nameEl.disabled = true;
+  const saveBtn = document.getElementById('pm_saveBtn');
+  if (saveBtn) saveBtn.textContent = '수정';
+  window.previewRoute && window.previewRoute();
+};
+
+window.previewRoute = function() {
+  const cat = document.getElementById('pm_cat')?.value || 'WN';
+  const heat = document.getElementById('pm_heat')?.value || 'N';
+  const route = buildRoute(cat, heat);
+  const el = document.getElementById('pm_routePreview');
+  if (el) el.textContent = route.join(' → ');
+};
+
+window.saveProduct = async function() {
+  const name = document.getElementById('pm_name')?.value.trim() || '';
+  const cat = document.getElementById('pm_cat')?.value || 'WN';
+  if (!name) { toast('제품명을 입력하세요', 'warn'); return; }
+  const drawing = document.getElementById('pm_drawing')?.value.trim() || '';
+  const shrink = parseFloat(document.getElementById('pm_shrink')?.value) || 0;
+  const stack = parseInt(document.getElementById('pm_stack')?.value) || 0;
+  const joint = document.getElementById('pm_joint')?.value || '';
+  const heat = document.getElementById('pm_heat')?.value || 'N';
+  const route = buildRoute(cat, heat);
+  try {
+    const ref = FB.doc(firebaseDb, 'products', name);
+    await FB.setDoc(ref, { name, category: cat, drawing, shrink, stack, joint, heat, route, createdAt: todayStr() });
+    toast(`제품 "${name}" 등록 완료`, 'success');
+    const snap = await FB.getDocs(FB.collection(firebaseDb, 'products'));
+    const newProds = {};
+    snap.forEach(d => { newProds[d.id] = d.data(); });
+    S.set('PRODUCTS', newProds);
+    populateProductSelects();
+    window.showProductList();
+  } catch (err) { handleFirestoreError(err, '제품 등록'); }
+};
+
+// ===================================================
+// 일괄 적용 (배치바)
+// ===================================================
+window.applyBatchAll = async function() {
+  const proc = document.getElementById('batchProcSel')?.value;
+  const equip = document.getElementById('batchEquipSel')?.value;
+  const startDate = document.getElementById('batchStartDate')?.value;
+  const endDate = document.getElementById('batchEndDate')?.value;
+  if (!S.wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
+  try {
+    const wb = FB.writeBatch(firebaseDb);
+    S.wsSelection.forEach(sn => {
+      const ref = FB.doc(firebaseDb, 'production', sn);
+      const updates = {};
+      if (proc) updates.currentProcess = proc;
+      if (equip && proc) updates[`processes.${proc}.equip`] = equip;
+      if (startDate && proc) updates[`processes.${proc}.planStart`] = startDate;
+      if (endDate && proc) updates[`processes.${proc}.planEnd`] = endDate;
+      if (Object.keys(updates).length) wb.update(ref, updates);
+    });
+    await wb.commit();
+    toast(`${S.wsSelection.size}건 일괄 적용 완료`, 'success');
+    S.wsSelection.clear();
+  } catch (err) { handleFirestoreError(err, '일괄 적용'); }
+};
+
+window.checkEquipConflict = function() {
+  const equip = document.getElementById('sn_equip')?.value || '';
+  const startDate = document.getElementById('sn_start')?.value || '';
+  const warn = document.getElementById('equipConflictWarn');
+  if (!warn) return;
+  if (!equip || !startDate) { warn.innerHTML = ''; return; }
+  const conflicts = Object.entries(S.DATA).filter(([sn, d]) =>
+    getRoute(sn, d).some(proc => {
+      const p = getProc(d, proc);
+      if (p.equip !== equip || p.status === '완료') return false;
+      const ps = fD(p.planStart || p.actualStart);
+      const pe = fD(p.planEnd);
+      return ps && pe && startDate >= ps && startDate <= pe;
+    })
+  );
+  warn.innerHTML = conflicts.length
+    ? `<div style="font-size:11px;color:var(--warn);margin-top:3px">⚠️ ${equip}이(가) ${conflicts.length}건과 일정 겹침</div>`
+    : '';
+};
+
+window.loadIssueSNList = function() {
+  const prodId = document.getElementById('is_prod')?.value || '';
+  const list = document.getElementById('issueSNList');
+  if (!list) return;
+  const prod = S.PRODUCTS[prodId];
+  if (!prod) { list.innerHTML = ''; return; }
+  const matching = Object.keys(S.DATA).filter(sn => {
+    const d = S.DATA[sn];
+    return d.productName === prod.name || extractCategory(sn) === (prod.category || '');
+  });
+  list.innerHTML = matching.map(sn => `<option value="${esc(sn)}">`).join('');
+};
+
+// ===================================================
+// 내보내기
+// ===================================================
+window.exportExcel = function() {
+  if (typeof XLSX === 'undefined') { toast('SheetJS 로딩 중...', 'warn'); return; }
+  const rows = [];
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    const route = getRoute(sn, d);
+    const row = {
+      'S/N': sn, '제품': d.productName || '', '카테고리': extractCategory(sn),
+      '상태': d.status || '대기', '현재공정': d.currentProcess || '',
+      '시작일': fD(d.startDate), '납기': fD(d.endDate),
+      '진행률': calcProgress(d, sn) + '%', '배치': d.batch || d.batchId || ''
+    };
+    route.forEach(proc => {
+      const p = getProc(d, proc);
+      row[`${proc}_상태`] = p.status || '';
+      row[`${proc}_설비`] = p.equip || '';
+      row[`${proc}_시작`] = fD(p.planStart || p.actualStart);
+      row[`${proc}_종료`] = fD(p.actualEnd || p.planEnd);
+      row[`${proc}_불량`] = p.defect || '';
+    });
+    rows.push(row);
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '생산데이터');
+  if (S.ISSUES.length) {
+    const issueRows = S.ISSUES.map(i => ({ '날짜': fD(i.date), '유형': i.type || '', 'SN': i.sn || '', '내용': i.content || '' }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(issueRows), '이슈');
+  }
+  XLSX.writeFile(wb, `ESC_생산데이터_${todayStr()}.xlsx`);
+  toast('엑셀 내보내기 완료', 'success');
+};
+
+window.exportJSON = function() {
+  const data = { production: S.DATA, products: S.PRODUCTS, issues: S.ISSUES, exportDate: todayStr(), version: 'v10.1' };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.download = `ESC_backup_${todayStr()}.json`;
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  toast('JSON 백업 완료', 'success');
+};
+
 // === etc...
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -1660,7 +2210,19 @@ window.extractCategory = extractCategory;
 window.extractBatchFromSN = extractBatchFromSN;
 window.calcProgress = calcProgress;
 window.getEquipList = getEquipList;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.fmt = fmt;
 window.getFiltered = function() {
-  return S.DATA;
+  const fProd = document.getElementById('ganttProdFilter')?.value || '';
+  const fStatus = document.getElementById('ganttStatusFilter')?.value || '';
+  if (!fProd && !fStatus) return S.DATA;
+  const result = {};
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    if (fProd && (d.productName || '') !== fProd) return;
+    if (fStatus && (d.status || '대기') !== fStatus) return;
+    result[sn] = d;
+  });
+  return result;
 };
 window.S = S;
