@@ -118,6 +118,37 @@ export function extractBatchFromSN(sn) {
   return match ? match[1] : '';
 }
 
+export function getInputMonth(item) {
+  // 1순위: inputDate 필드
+  if (item.inputDate) {
+    const d = typeof item.inputDate === 'string' ? item.inputDate : '';
+    if (d.length >= 7) return d.slice(0, 7); // "2026-01" 형태
+  }
+  // 2순위: 배치코드 prefix 파싱
+  const batch = item.batchId || item.batch || '';
+  if (batch.length >= 4) {
+    const yy = batch.slice(0, 2);
+    const mm = batch.slice(2, 4);
+    const year = 2000 + parseInt(yy);
+    const month = parseInt(mm);
+    if (!isNaN(year) && month >= 1 && month <= 12) {
+      return year + '-' + String(month).padStart(2, '0');
+    }
+  }
+  // 3순위: createdAt
+  if (item.createdAt) {
+    const d = typeof item.createdAt === 'string' ? item.createdAt.slice(0, 7) : '';
+    if (d.length >= 7) return d;
+  }
+  return '기타';
+}
+
+export function formatMonth(monthKey) {
+  if (monthKey === '기타') return '기타';
+  const [y, m] = monthKey.split('-');
+  return y + '년 ' + parseInt(m) + '월';
+}
+
 export function getRoute(sn, item) {
   if (item && Array.isArray(item.route) && item.route.length > 0) return item.route;
   if (item && typeof item.route === 'string' && item.route.includes('→')) {

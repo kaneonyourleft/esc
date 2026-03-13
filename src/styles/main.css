@@ -1973,3 +1973,35 @@ canvas { display: block; }
   white-space: nowrap;
 }
 .exec-today-btn:hover { opacity: 0.85; }
+
+.ws-month-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--ac1);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 8px;
+  margin: 16px 0 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+.ws-month-header:first-child {
+  margin-top: 8px;
+}
+.ws-month-arrow {
+  font-size: 11px;
+  width: 16px;
+  flex-shrink: 0;
+}
+.ws-month-title {
+  font-size: 15px;
+  flex: 1;
+}
+.ws-month-summary {
+  font-size: 12px;
+  opacity: 0.85;
+  font-weight: 400;
+}
