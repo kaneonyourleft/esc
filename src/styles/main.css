@@ -1956,3 +1956,20 @@ canvas { display: block; }
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* ── 오늘 복귀 버튼 ── */
+.exec-today-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  background: var(--ac1);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.exec-today-btn:hover { opacity: 0.85; }

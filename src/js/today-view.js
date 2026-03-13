@@ -53,10 +53,11 @@ export function renderTodayView() {
       <button class="exec-nav-btn" onclick="window.prevDate()" aria-label="이전 날짜">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div class="exec-date-text${isToday ? ' exec-date-today' : ''}">${formatDateHeader(currentDate)}</div>
+      <div class="exec-date-text${isToday ? ' exec-date-today' : ''}" onclick="window.goToday()" style="cursor:pointer" title="오늘로 이동">${formatDateHeader(currentDate)}</div>
       <button class="exec-nav-btn" onclick="window.nextDate()" aria-label="다음 날짜">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
+      ${!isToday ? `<button class="exec-today-btn" onclick="window.goToday()">오늘</button>` : ''}
     </div>
   `;
 
@@ -249,6 +250,12 @@ window.prevDate = function() {
 window.nextDate = function() {
   currentDate = new Date(currentDate);
   currentDate.setDate(currentDate.getDate() + 1);
+  renderTodayView();
+};
+
+window.goToday = function() {
+  currentDate = new Date();
+  currentDate.setHours(0, 0, 0, 0);
   renderTodayView();
 };
 
