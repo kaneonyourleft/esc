@@ -13,6 +13,7 @@ import {
   getDaysUntilDeadline,
   getSerialRange
 } from './today-service.js';
+import { startProcess, completeProcess } from './transition.js';
 
 /* ────────────────────────────────────────────
    상태
@@ -130,14 +131,14 @@ function renderTaskCard(group, uid, isDelayed) {
   if (procStatus === '대기') {
     actionBtn = `
       <button class="exec-action-btn exec-action-start"
-        onclick="event.stopPropagation();window.quickStartTask('${cardId}',${snListJson},'${procEsc}')">
+        onclick="event.stopPropagation();window.quickStartTask('${cardId}',${snListJson.replace(/"/g, '&quot;')},'${procEsc}')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         시작
       </button>`;
   } else if (procStatus === '진행') {
     actionBtn = `
       <button class="exec-action-btn exec-action-complete"
-        onclick="event.stopPropagation();window.quickCompleteTask('${cardId}',${snListJson},'${procEsc}')">
+        onclick="event.stopPropagation();window.quickCompleteTask('${cardId}',${snListJson.replace(/"/g, '&quot;')},'${procEsc}')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
         완료
       </button>`;
@@ -285,34 +286,19 @@ function attachSwipeSupport(container) {
    빠른 시작 (배치 전체)
 ──────────────────────────────────────────── */
 window.quickStartTask = async function(cardId, snList, procName) {
-  if (!window.FB || !window.firebaseDb) {
-    if (window.toast) window.toast('Firebase 초기화 중...', 'warn');
-    return;
-  }
-
   const btn = document.querySelector(`#${cardId} .exec-action-start`);
   if (btn) { btn.disabled = true; btn.textContent = '처리중...'; }
 
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const batch = window.FB.writeBatch(window.firebaseDb);
-
-    snList.forEach(sn => {
-      const ref = window.FB.doc(window.firebaseDb, 'production', sn);
-      batch.update(ref, {
-        [`processes.${procName}.status`]: '진행',
-        [`processes.${procName}.actualStart`]: today,
-        currentProcess: procName,
-        status: '진행'
-      });
-    });
-
-    await batch.commit();
-    if (window.toast) window.toast(`${snList.length}건 [${procName}] 시작`, 'success');
+    const result = await startProcess(snList, procName, { source: 'home', user: window.currentUserEmail || 'unknown' });
+    if (window.toast) window.toast(`${result.success}건 [${procName}] 시작`, 'success');
   } catch (err) {
     console.error('quickStartTask error:', err);
     if (window.toast) window.toast('시작 처리 실패: ' + err.message, 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> 시작'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> 시작';
+    }
   }
 };
 
@@ -320,31 +306,18 @@ window.quickStartTask = async function(cardId, snList, procName) {
    빠른 완료 (배치 전체)
 ──────────────────────────────────────────── */
 window.quickCompleteTask = async function(cardId, snList, procName) {
-  if (!window.FB || !window.firebaseDb) {
-    if (window.toast) window.toast('Firebase 초기화 중...', 'warn');
-    return;
-  }
-
   const btn = document.querySelector(`#${cardId} .exec-action-complete`);
   if (btn) { btn.disabled = true; btn.textContent = '처리중...'; }
 
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const batch = window.FB.writeBatch(window.firebaseDb);
-
-    snList.forEach(sn => {
-      const ref = window.FB.doc(window.firebaseDb, 'production', sn);
-      batch.update(ref, {
-        [`processes.${procName}.status`]: '완료',
-        [`processes.${procName}.actualEnd`]: today
-      });
-    });
-
-    await batch.commit();
-    if (window.toast) window.toast(`${snList.length}건 [${procName}] 완료`, 'success');
+    const result = await completeProcess(snList, procName, { source: 'home', user: window.currentUserEmail || 'unknown' });
+    if (window.toast) window.toast(`${result.success}건 [${procName}] 완료`, 'success');
   } catch (err) {
     console.error('quickCompleteTask error:', err);
     if (window.toast) window.toast('완료 처리 실패: ' + err.message, 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 완료'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 완료';
+    }
   }
 };

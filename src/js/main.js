@@ -5,6 +5,7 @@ import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, 
 import { renderTodayView } from './today-view.js';
 import { renderSettings as _renderSettings } from './settings.js';
 import { renderAnalysis as _renderAnalysis, drawDonutChart as _drawDonutChart } from './analysis.js';
+import { startProcess, completeProcess, changeEquipment, changeCurrentProcess, setStatus, setStatusBatch } from './transition.js';
 
 // ===================================================
 // ESC Manager v10.0 - main.js
@@ -573,6 +574,16 @@ window.toggleGroup = function(key) {
   renderWorkspace();
 };
 
+window.toggleMonthGroup = function(monthKey) {
+  const body = document.getElementById('ws-month-' + monthKey.replace(/[^a-zA-Z0-9]/g, '-'));
+  const arrow = body?.previousElementSibling?.querySelector('.ws-month-arrow');
+  if (body) {
+    const isHidden = body.style.display === 'none';
+    body.style.display = isHidden ? '' : 'none';
+    if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
+  }
+};
+
 function updateFilterOptions() {
   const prodSet = new Set(), batchSet = new Set(), equipSet = new Set(), procSet = new Set();
   Object.entries(S.DATA).forEach(([sn, d]) => {
@@ -610,6 +621,7 @@ window.renderWorkspace = function renderWorkspace() {
   const fEquip = document.getElementById("wsFilterEquip")?.value || "";
   const fProc = document.getElementById("wsFilterProc")?.value || "";
   const fDate = document.getElementById("wsFilterDate")?.value || "";
+  
   const filtered = Object.entries(S.DATA).filter(([sn, d]) => {
     const s = d.status || "대기";
     if (fStatus && s !== fStatus) return false;
@@ -638,7 +650,6 @@ window.renderWorkspace = function renderWorkspace() {
         if (fD(p.actualStart)) allDates.push(fD(p.actualStart));
         if (fD(p.actualEnd)) allDates.push(fD(p.actualEnd));
       });
-
       if (!allDates.includes(fDate)) return false;
     }
     if (search) {
@@ -651,105 +662,213 @@ window.renderWorkspace = function renderWorkspace() {
   const countEl = document.getElementById('wsSearchCount');
   if (countEl) countEl.textContent = search ? `${filtered.length}건 검색` : '';
 
-  // 2단계 그룹핑
-  let groups = {};
+  // [1] 월별 그룹핑
+  const months = {};
   filtered.forEach(([sn, d]) => {
-    let mainKey, subKey;
-    if (S.wsViewMode === 'batch') {
-      mainKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
-      subKey = d.productName || extractCategory(sn) || '기타';
-    } else {
-      mainKey = d.productName || extractCategory(sn) || '기타';
-      subKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
-    }
-    if (!groups[mainKey]) groups[mainKey] = {};
-    if (!groups[mainKey][subKey]) groups[mainKey][subKey] = [];
-    groups[mainKey][subKey].push([sn, d]);
+    const m = getInputMonth(d);
+    if (!months[m]) months[m] = [];
+    months[m].push([sn, d]);
   });
 
-  const groupKeys = Object.keys(groups).sort();
-  groupKeys.forEach(k => { if (S.wsGroupState[k] === undefined) S.wsGroupState[k] = true; });
+  const sortedMonthKeys = Object.keys(months).sort((a, b) => {
+    if (a === '기타') return 1;
+    if (b === '기타') return -1;
+    return b.localeCompare(a);
+  });
 
   let html = '';
-  groupKeys.forEach(key => {
-    const subGroups = groups[key];
-    const allItems = Object.values(subGroups).flat();
-    const collapsed = S.wsGroupState[key];
-    const doneCount = allItems.filter(([, d]) => (d.status || '대기') === '완료').length;
-    const mainLabel = S.wsViewMode === 'batch'
-      ? `${esc(key)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${allItems.length}개 LOT)</span>`
-      : esc(key);
+  sortedMonthKeys.forEach((mKey, idx) => {
+    const mData = months[mKey];
+    const monthId = 'ws-month-' + mKey.replace(/[^a-zA-Z0-9]/g, '-');
+    const isExpanded = idx === 0; // 최신월만 펼침
+    
+    // 월별 요약 정보
+    const batchSet = new Set();
+    let doneTotal = 0;
+    mData.forEach(([, d]) => {
+      batchSet.add(d.batch || d.batchId || '기타');
+      if (d.status === '완료') doneTotal++;
+    });
 
-    html += `<div class="ws-group">
-      <div class="ws-group-header" onclick="toggleGroup('${esc(key)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r4);margin-bottom:4px;user-select:none">
-        <span style="font-size:12px;transition:transform 0.2s;transform:rotate(${collapsed ? '0' : '90'}deg)">▶</span>
-        <span style="font-weight:600;font-size:14px;flex:1">${mainLabel}</span>
-        <span style="font-size:12px;color:var(--t2)">${doneCount}/${allItems.length} 완료</span>
-      </div>`;
+    html += `
+      <div class="ws-month-header" onclick="toggleMonthGroup('${mKey}')">
+        <span class="ws-month-arrow">${isExpanded ? '▼' : '▶'}</span>
+        <span class="ws-month-title">${formatMonth(mKey)}</span>
+        <span class="ws-month-summary">배치 ${batchSet.size}개 · ${mData.length}매 · 완료 ${doneTotal}매</span>
+      </div>
+      <div class="ws-month-body" id="${monthId}" style="display: ${isExpanded ? '' : 'none'}">
+    `;
 
-    if (!collapsed) {
-      const subKeys = Object.keys(subGroups).sort();
-      subKeys.forEach(sk => {
-        const items = subGroups[sk];
-        const subStateKey = key + '::' + sk;
-        if (S.wsGroupState[subStateKey] === undefined) S.wsGroupState[subStateKey] = false;
-        const subCollapsed = S.wsGroupState[subStateKey];
-        const subDone = items.filter(([, d]) => (d.status || '대기') === '완료').length;
-        const subLabel = S.wsViewMode === 'batch' ? '제품: ' + esc(sk) : '배치: ' + esc(sk);
+    // mode별 그룹핑
+    let groups = {};
+    if (S.wsViewMode === 'process') {
+      // 월 → 공정 → 호기 → 배치 → 제품 → S/N
+      mData.forEach(([sn, d]) => {
+        const route = getRoute(sn, d);
+        const curProc = d.currentProcess || route[0] || '기타';
+        const procData = getProc(d, curProc);
+        const equip = procData.equip || '미지정';
+        const batch = d.batch || d.batchId || '기타';
+        const product = d.productName || '기타';
+        
+        if (!groups[curProc]) groups[curProc] = {};
+        if (!groups[curProc][equip]) groups[curProc][equip] = {};
+        if (!groups[curProc][equip][batch]) groups[curProc][equip][batch] = {};
+        if (!groups[curProc][equip][batch][product]) groups[curProc][equip][batch][product] = [];
+        groups[curProc][equip][batch][product].push([sn, d]);
+      });
 
-        html += `<div style="margin-left:16px;margin-bottom:2px">
-          <div onclick="toggleGroup('${esc(subStateKey)}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg2);border-radius:var(--r4);margin-bottom:2px;user-select:none">
-            <span style="font-size:10px;transition:transform 0.2s;transform:rotate(${subCollapsed ? '0' : '90'}deg)">▶</span>
-            <span style="font-size:13px;font-weight:500;flex:1">${subLabel} <span style="font-size:11px;color:var(--t2)">(${items.length})</span></span>
-            <span style="font-size:11px;color:var(--t2)">${subDone}/${items.length}</span>
-          </div>`;
+      const procs = Object.keys(groups).sort((a, b) => PROC_ORDER.indexOf(a) - PROC_ORDER.indexOf(b));
+      procs.forEach(proc => {
+        const equips = groups[proc];
+        const allItems = Object.values(equips).flatMap(e => Object.values(e).flatMap(b => Object.values(b).flat()));
+        const doneCount = allItems.filter(([, d]) => (d.status || '대기') === '완료').length;
+        const pct = Math.round(doneCount / allItems.length * 100);
 
-        if (!subCollapsed) {
-          html += `<div class="table-responsive"><table class="table ws-table">
-            <thead><tr>
-              <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(subStateKey)}',this.checked)"></th>
-              <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
-            </tr></thead><tbody>`;
+        html += `
+          <div class="ws-group">
+            <div class="ws-group-header" onclick="toggleGroup('${esc(mKey + proc)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r4);margin-bottom:4px;user-select:none">
+              <span style="font-size:12px;transition:transform 0.2s;transform:rotate(${!S.wsGroupState[mKey + proc] ? '90' : '0'}deg)">▶</span>
+              <span style="font-weight:600;font-size:14px;flex:1">${esc(proc)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${allItems.length}개)</span></span>
+              <span style="font-size:12px;color:var(--t2)">${pct}% 완료 (${doneCount}/${allItems.length})</span>
+            </div>
+            ${!S.wsGroupState[mKey + proc] ? `
+              <div style="margin-left:16px">
+                ${Object.keys(equips).sort().map(eq => {
+                  const batches = equips[eq];
+                  return `
+                    <div style="margin-bottom:8px">
+                      <div style="font-size:13px;font-weight:600;padding:4px 8px;background:var(--bg2);border-radius:4px;margin-bottom:4px">${esc(eq)}</div>
+                      <div style="margin-left:8px">
+                        ${Object.keys(batches).sort().map(ba => {
+                          const prods = batches[ba];
+                          return Object.keys(prods).sort().map(pr => {
+                            const items = prods[pr];
+                            return renderItemsTable(mKey + proc + eq + ba + pr, items, `${esc(ba)} · ${esc(pr)}`);
+                          }).join('');
+                        }).join('')}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
 
-          items.forEach(([sn, d]) => {
-            const status = d.status || '대기';
-            const route = getRoute(sn, d);
-            const curProc = d.currentProcess || route[0] || '';
-            const procData = getProc(d, curProc);
-            const equip = procData.equip || '';
-            const startDate = fD(procData.planStart || procData.actualStart || d.startDate);
-            const endDate = fD(d.endDate);
-            const progress = calcProgress(d, sn);
-            const checked = S.wsSelection.has(sn) ? 'checked' : '';
-
-            html += `<tr class="ws-row ${status === '지연' ? 'row-delay' : ''}" data-sn="${esc(sn)}">
-              <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
-              <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
-              <td>${statusBadge(status)}</td>
-              <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
-                <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
-              </td>
-              <td class="equip-cell" onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="cursor:pointer" title="클릭하여 설비 변경">
-                ${esc(equip || '-')} <span style="font-size:10px;color:var(--t2)">▼</span>
-              </td>
-              <td class="date-cell">
-                <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" style="background:transparent;border:none;color:inherit;font-size:12px;width:120px">
-              </td>
-              <td style="font-size:12px">${fmt(endDate)}</td>
-              <td><div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};border-radius:3px;transition:width 0.3s"></div></div><span style="font-size:11px;color:var(--t2)">${progress}%</span></div></td>
-            </tr>`;
-          });
-          html += '</tbody></table></div>';
+    } else {
+      // 배치별 또는 제품별
+      mData.forEach(([sn, d]) => {
+        let mainKey, subKey;
+        if (S.wsViewMode === 'batch') {
+          mainKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
+          subKey = d.productName || extractCategory(sn) || '기타';
+        } else {
+          mainKey = d.productName || extractCategory(sn) || '기타';
+          subKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
         }
-        html += '</div>';
+        if (!groups[mainKey]) groups[mainKey] = {};
+        if (!groups[mainKey][subKey]) groups[mainKey][subKey] = [];
+        groups[mainKey][subKey].push([sn, d]);
+      });
+
+      const sortedMainKeys = Object.keys(groups).sort();
+      sortedMainKeys.forEach(mK => {
+        const subGroups = groups[mK];
+        const allItems = Object.values(subGroups).flat();
+        const doneCount = allItems.filter(([, d]) => (d.status || '대기') === '완료').length;
+        const mainLabel = S.wsViewMode === 'batch' 
+          ? `${esc(mK)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${allItems.length}개 LOT)</span>`
+          : esc(mK);
+        const groupStateKey = mKey + mK;
+        if (S.wsGroupState[groupStateKey] === undefined) S.wsGroupState[groupStateKey] = true;
+        const collapsed = S.wsGroupState[groupStateKey];
+
+        html += `
+          <div class="ws-group">
+            <div class="ws-group-header" onclick="toggleGroup('${esc(groupStateKey)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r4);margin-bottom:4px;user-select:none">
+              <span style="font-size:12px;transition:transform 0.2s;transform:rotate(${collapsed ? '0' : '90'}deg)">▶</span>
+              <span style="font-weight:600;font-size:14px;flex:1">${mainLabel}</span>
+              <span style="font-size:12px;color:var(--t2)">${doneCount}/${allItems.length} 완료</span>
+            </div>
+            ${!collapsed ? `
+              <div style="margin-left:16px">
+                ${Object.keys(subGroups).sort().map(sK => {
+                  const items = subGroups[sK];
+                  const subLabel = S.wsViewMode === 'batch' ? '제품: ' + esc(sK) : '배치: ' + esc(sK);
+                  return renderItemsTable(groupStateKey + '::' + sK, items, subLabel);
+                }).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
       });
     }
-    html += '</div>';
+
+    html += `</div>`; // .ws-month-body end
   });
 
   table.innerHTML = html || '<div style="text-align:center;padding:40px;color:var(--t2)">데이터가 없습니다</div>';
   updateBatchBar();
 }
+
+function renderItemsTable(stateKey, items, label) {
+  if (S.wsGroupState[stateKey] === undefined) S.wsGroupState[stateKey] = false;
+  const collapsed = S.wsGroupState[stateKey];
+  const doneCount = items.filter(([, d]) => (d.status || '대기') === '완료').length;
+
+  let html = `
+    <div style="margin-bottom:4px">
+      <div onclick="toggleGroup('${esc(stateKey)}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg2);border-radius:var(--r4);margin-bottom:2px;user-select:none">
+        <span style="font-size:10px;transition:transform 0.2s;transform:rotate(${collapsed ? '0' : '90'}deg)">▶</span>
+        <span style="font-size:13px;font-weight:500;flex:1">${label} <span style="font-size:11px;color:var(--t2)">(${items.length})</span></span>
+        <span style="font-size:11px;color:var(--t2)">${doneCount}/${items.length}</span>
+      </div>
+      ${!collapsed ? `
+        <div class="table-responsive"><table class="table ws-table">
+          <thead><tr>
+            <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(stateKey)}',this.checked)"></th>
+            <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
+          </tr></thead>
+          <tbody>
+            ${items.map(([sn, d]) => {
+              const status = d.status || '대기';
+              const route = getRoute(sn, d);
+              const curProc = d.currentProcess || route[0] || '';
+              const procData = getProc(d, curProc);
+              const equip = procData.equip || '';
+              const startDate = fD(procData.planStart || procData.actualStart || d.startDate);
+              const endDate = fD(d.endDate);
+              const progress = calcProgress(d, sn);
+              const checked = S.wsSelection.has(sn) ? 'checked' : '';
+              return `
+                <tr class="ws-row ${status === '지연' ? 'row-delay' : ''}" data-sn="${esc(sn)}">
+                  <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
+                  <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
+                  <td>${statusBadge(status)}</td>
+                  <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
+                    <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
+                  </td>
+                  <td class="equip-cell" onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="cursor:pointer" title="클릭하여 설비 변경">
+                    ${esc(equip || '-')} <span style="font-size:10px;color:var(--t2)">▼</span>
+                  </td>
+                  <td class="date-cell">
+                    <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" style="background:transparent;border:none;color:inherit;font-size:12px;width:120px">
+                  </td>
+                  <td style="font-size:12px">${fmt(endDate)}</td>
+                  <td><div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};border-radius:3px;transition:width 0.3s"></div></div><span style="font-size:11px;color:var(--t2)">${progress}%</span></div></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table></div>
+      ` : ''}
+    </div>
+  `;
+  return html;
+}
+
 
 // === 공정/설비 드롭다운 ===
 function closeAllDropdowns() {
@@ -782,8 +901,7 @@ window.showProcDropdown = function(e, sn) {
       dd.remove();
       if (proc !== current) {
         try {
-          const ref = FB.doc(firebaseDb, 'production', sn);
-          await FB.updateDoc(ref, { currentProcess: proc });
+          await changeCurrentProcess(sn, proc);
           toast(`${sn} 현재공정 → ${proc}`, 'success');
         } catch (err) { handleFirestoreError(err, '공정 변경'); }
       }
@@ -852,8 +970,7 @@ window.showEquipDropdown = function(e, sn, proc) {
 
 async function updateEquip(sn, proc, equip) {
   try {
-    const ref = FB.doc(firebaseDb, 'production', sn);
-    await FB.updateDoc(ref, { [`processes.${proc}.equip`]: equip });
+    await changeEquipment(sn, proc, equip);
     toast(`${sn} ${proc} 설비 → ${equip || '해제'}`, 'success');
   } catch (err) { handleFirestoreError(err, '설비 변경'); }
 }
@@ -874,6 +991,7 @@ window.updateProcStartDate = async function(sn, proc, val) {
       updates[`processes.${proc}.status`] = '진행';
       updates[`processes.${proc}.actualStart`] = val;
     }
+    updates.updatedAt = FB.serverTimestamp();
     await FB.updateDoc(ref, updates);
     toast(`${sn} ${proc} 시작일 → ${fmt(val)} (종료: ${fmt(endDate)})`, 'success');
   } catch (err) { handleFirestoreError(err, '날짜 변경'); }
@@ -887,18 +1005,32 @@ window.toggleSNSelect = function(sn, checked) {
 
 window.toggleGroupSelect = function(key, checked) {
   Object.entries(S.DATA).forEach(([sn, d]) => {
-    let mainKey, subKey;
-    if (S.wsViewMode === "batch") {
-      mainKey = d.batch || d.batchId || extractBatchFromSN(sn) || "기타";
-      subKey = d.productName || extractCategory(sn) || "기타";
+    const mKey = getInputMonth(d);
+    
+    if (S.wsViewMode === 'process') {
+      const route = getRoute(sn, d);
+      const proc = d.currentProcess || route[0] || '기타';
+      const pData = getProc(d, proc);
+      const eq = pData.equip || '미지정';
+      const ba = d.batch || d.batchId || '기타';
+      const pr = d.productName || '기타';
+      
+      const fullKey = mKey + proc + eq + ba + pr;
+      if (key === fullKey || key === (mKey + proc)) {
+        if (checked) S.wsSelection.add(sn); else S.wsSelection.delete(sn);
+      }
     } else {
-      mainKey = d.productName || extractCategory(sn) || "기타";
-      subKey = d.batch || d.batchId || extractBatchFromSN(sn) || "기타";
-    }
-    // 서브그룹 키 (제품::배치) 또는 메인그룹 키 매칭
-    const subStateKey = mainKey + "::" + subKey;
-    if (key === subStateKey || key === mainKey) {
-      if (key === mainKey || key === subStateKey) {
+      let mainKey, subKey;
+      if (S.wsViewMode === 'batch') {
+        mainKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
+        subKey = d.productName || extractCategory(sn) || '기타';
+      } else {
+        mainKey = d.productName || extractCategory(sn) || '기타';
+        subKey = d.batch || d.batchId || extractBatchFromSN(sn) || '기타';
+      }
+      const mainStateKey = mKey + mainKey;
+      const subStateKey = mainStateKey + '::' + subKey;
+      if (key === subStateKey || key === mainStateKey) {
         if (checked) S.wsSelection.add(sn); else S.wsSelection.delete(sn);
       }
     }
@@ -928,12 +1060,7 @@ window.applyBatch = async function() {
   if (!status) { toast('상태를 선택하세요', 'warn'); return; }
   if (!S.wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
   try {
-    const batch = FB.writeBatch(firebaseDb);
-    S.wsSelection.forEach(sn => {
-      const ref = FB.doc(firebaseDb, 'production', sn);
-      batch.update(ref, { status });
-    });
-    await batch.commit();
+    await setStatusBatch([...S.wsSelection], status);
     toast(`${S.wsSelection.size}건 상태 → ${status}`, 'success');
     S.wsSelection.clear();
   } catch (err) { handleFirestoreError(err, '일괄 상태 변경'); }
@@ -943,12 +1070,7 @@ window.applyNG = async function() {
   if (!S.wsSelection.size) { toast('선택된 항목이 없습니다', 'warn'); return; }
   if (!confirm(`${S.wsSelection.size}건을 NG(폐기) 처리하시겠습니까?`)) return;
   try {
-    const batch = FB.writeBatch(firebaseDb);
-    S.wsSelection.forEach(sn => {
-      const ref = FB.doc(firebaseDb, 'production', sn);
-      batch.update(ref, { status: '폐기' });
-    });
-    await batch.commit();
+    await setStatusBatch([...S.wsSelection], '폐기');
     toast(`${S.wsSelection.size}건 NG 처리 완료`, 'success');
     S.wsSelection.clear();
   } catch (err) { handleFirestoreError(err, 'NG 처리'); }
@@ -1668,10 +1790,7 @@ window.applySpStatus = async function() {
   if (!S.selectedSN) return;
   const status = document.getElementById('spStatusSel').value;
   try {
-    const ref = FB.doc(firebaseDb, 'production', S.selectedSN);
-    const updates = { status };
-    if (status === '완료') updates.completedAt = new Date().toISOString().slice(0, 10);
-    await FB.updateDoc(ref, updates);
+    await setStatus(S.selectedSN, status);
     toast(`${S.selectedSN} 상태 → ${status}`, 'success');
     window.openSidePanel(S.selectedSN);
   } catch (err) { handleFirestoreError(err, '상태 변경'); }
@@ -2100,7 +2219,7 @@ window.applyBatchAll = async function() {
       if (equip && proc) updates[`processes.${proc}.equip`] = equip;
       if (startDate && proc) updates[`processes.${proc}.planStart`] = startDate;
       if (endDate && proc) updates[`processes.${proc}.planEnd`] = endDate;
-      if (Object.keys(updates).length) wb.update(ref, updates);
+      if (Object.keys(updates).length) { updates.updatedAt = FB.serverTimestamp(); wb.update(ref, updates); }
     });
     await wb.commit();
     toast(`${S.wsSelection.size}건 일괄 적용 완료`, 'success');
@@ -2234,3 +2353,11 @@ window.getFiltered = function() {
   return result;
 };
 window.S = S;
+
+// === Phase 5: transition.js window 등록 ===
+window.startProcess = startProcess;
+window.completeProcess = completeProcess;
+window.changeEquipment = changeEquipment;
+window.changeCurrentProcess = changeCurrentProcess;
+window.setStatus = setStatus;
+window.setStatusBatch = setStatusBatch;
