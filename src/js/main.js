@@ -4,6 +4,7 @@ import { handleFirestoreError, toast, openModal, closeModal, statusBadge, esc } 
 import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, getEquipList, calcProgress, extractCategory, extractBatchFromSN, positionDropdown, handleEmptyChart, mdToHtml } from './utils.js';
 import { renderTodayView } from './today-view.js';
 import { renderSettings as _renderSettings } from './settings.js';
+import { renderAnalysis as _renderAnalysis, drawDonutChart as _drawDonutChart } from './analysis.js';
 
 // ===================================================
 // ESC Manager v10.0 - main.js
@@ -197,6 +198,7 @@ function subscribeData() {
     snap.forEach(d => { newData[d.id] = d.data(); });
     S.set('DATA', newData);
     console.log(`📋 production: ${Object.keys(S.DATA).length} records`);
+    populateGanttProdFilter();
     onDataChanged();
     updateDataStats();
   }, (err) => { handleFirestoreError(err, '데이터 로드'); }));
@@ -240,20 +242,32 @@ function populateProductSelects() {
 }
 
 function updateDataStats() {
-  const el = document.getElementById('dataStats');
-  if (!el) return;
   const total = Object.keys(S.DATA).length;
   const counts = { '대기': 0, '진행': 0, '완료': 0, '지연': 0, '폐기': 0 };
   Object.values(S.DATA).forEach(d => {
     const s = d.status || '대기';
     if (counts[s] !== undefined) counts[s]++;
   });
-  el.innerHTML = `
+  const html = `
     <div class="stat-item"><div class="stat-val">${total}</div><div class="stat-lbl">전체 LOT</div></div>
     <div class="stat-item"><div class="stat-val">${counts['진행']}</div><div class="stat-lbl">진행중</div></div>
     <div class="stat-item"><div class="stat-val">${counts['완료']}</div><div class="stat-lbl">완료</div></div>
     <div class="stat-item"><div class="stat-val">${counts['지연']}</div><div class="stat-lbl">지연</div></div>
   `;
+  // Update all dataStats containers (home tab + settings tab)
+  document.querySelectorAll('#dataStats').forEach(el => { el.innerHTML = html; });
+}
+
+function populateGanttProdFilter() {
+  const sel = document.getElementById('ganttProdFilter');
+  if (!sel) return;
+  const prev = sel.value;
+  const prods = new Set();
+  Object.values(S.DATA).forEach(d => { if (d.productName) prods.add(d.productName); });
+  const opts = '<option value="">전체 제품</option>' +
+    [...prods].sort().map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  sel.innerHTML = opts;
+  if (prev && prods.has(prev)) sel.value = prev;
 }
 
 // === 탭 전환 ===
@@ -415,7 +429,11 @@ function renderWidgets() {
     }
   });
   container.innerHTML = html;
-  if (document.getElementById('homeDonut')) drawDonutChart('homeDonut');
+  if (document.getElementById('homeDonut')) {
+    const hCounts = { 대기: 0, 진행: 0, 완료: 0, 지연: 0, 폐기: 0 };
+    Object.values(S.DATA).forEach(d => { const s = d.status || '대기'; if (hCounts[s] !== undefined) hCounts[s]++; });
+    _drawDonutChart('homeDonut', hCounts);
+  }
   if (document.getElementById('homeWeekly')) drawWeeklyChart('homeWeekly');
 }
 
@@ -1324,27 +1342,9 @@ if (!window.saveGeminiKey) {
   };
 }
 
-// === 분석 탭 ===
+// === 분석 탭 — analysis.js에 위임 ===
 function renderAnalysis() {
-  const kpiEl = document.getElementById('analysisKpi');
-  if (kpiEl) {
-    const total = Object.keys(S.DATA).length;
-    let done = 0, prog = 0, delay = 0;
-    Object.values(S.DATA).forEach(d => {
-      const s = d.status || '대기';
-      if (s === '완료') done++;
-      if (s === '진행') prog++;
-      if (s === '지연') delay++;
-    });
-    const rate = total ? Math.round(done / total * 100) : 0;
-    kpiEl.innerHTML = `
-      <div class="kpi-card"><div class="kpi-val">${total}</div><div class="kpi-lbl">전체</div></div>
-      <div class="kpi-card"><div class="kpi-val" style="color:var(--ac2)">${prog}</div><div class="kpi-lbl">진행</div></div>
-      <div class="kpi-card"><div class="kpi-val" style="color:var(--suc)">${rate}%</div><div class="kpi-lbl">완료율</div></div>
-      <div class="kpi-card"><div class="kpi-val" style="color:var(--err)">${delay}</div><div class="kpi-lbl">지연</div></div>
-    `;
-  }
-  renderAllCharts();
+  _renderAnalysis();
 }
 
 function renderAllCharts() {
@@ -1355,8 +1355,10 @@ function renderAllCharts() {
     return { labels: Object.keys(counts), values: Object.values(counts), color: '#6366f1' };
   });
 
-  // 상태 도넛
-  drawDonutChart('analysisDonut');
+  // 상태 도넛 (analysis.js의 drawDonutChart 사용)
+  const counts2 = { 대기: 0, 진행: 0, 완료: 0, 지연: 0, 폐기: 0 };
+  Object.values(S.DATA).forEach(d => { const s = d.status || '대기'; if (counts2[s] !== undefined) counts2[s]++; });
+  _drawDonutChart('analysisDonut', counts2);
 
   // 월별 투입/완료
   drawBarChart('monthLineChart', () => {
@@ -1497,67 +1499,7 @@ function drawBarChart(canvasId, dataFn) {
   }
 }
 
-function drawDonutChart(canvasId) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-
-  let counts = { '대기': 0, '진행': 0, '완료': 0, '지연': 0, '폐기': 0 };
-  Object.values(S.DATA).forEach(d => {
-    const s = d.status || '대기';
-    if (counts[s] !== undefined) counts[s]++;
-  });
-
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  if (handleEmptyChart(canvas, total === 0 ? [] : counts, 'LOT 데이터가 없습니다')) return;
-
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width = canvas.parentElement.clientWidth - 32;
-  const h = canvas.height = 240;
-  ctx.clearRect(0, 0, w, h);
-
-  const colorMap = { '대기': '#64748b', '진행': '#6366f1', '완료': '#10b981', '지연': '#ef4444', '폐기': '#71717a' };
-  const cx = w / 2, cy = h / 2 - 10;
-  const outerR = Math.min(w, h) / 2 - 40;
-  const innerR = outerR * 0.55;
-
-  let angle = -Math.PI / 2;
-  Object.entries(counts).forEach(([status, count]) => {
-    if (!count) return;
-    const slice = count / total * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, outerR, angle, angle + slice);
-    ctx.closePath();
-    ctx.fillStyle = colorMap[status] || '#666';
-    ctx.fill();
-    angle += slice;
-  });
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg2').trim() || '#0f1629';
-  ctx.fill();
-
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--t1').trim() || '#fff';
-  ctx.font = 'bold 20px Noto Sans KR';
-  ctx.textAlign = 'center';
-  ctx.fillText(total, cx, cy + 2);
-  ctx.font = '12px Noto Sans KR';
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--t2').trim() || '#999';
-  ctx.fillText('전체', cx, cy + 18);
-
-  let lx = 10, ly = h - 18;
-  Object.entries(counts).forEach(([status, count]) => {
-    if (!count) return;
-    ctx.fillStyle = colorMap[status];
-    ctx.fillRect(lx, ly, 10, 10);
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--t2').trim() || '#999';
-    ctx.font = '11px Noto Sans KR';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${status} ${count}`, lx + 14, ly + 9);
-    lx += ctx.measureText(`${status} ${count}`).width + 24;
-  });
-}
+// drawDonutChart moved to analysis.js — use _drawDonutChart() imported above
 
 function drawWeeklyChart(canvasId) {
   const canvas = document.getElementById(canvasId);
