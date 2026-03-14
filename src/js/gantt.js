@@ -13,6 +13,7 @@ let ganttExpandState = {};
 const G_ROW = 34;
 const G_HEAD = 28;
 const G_PROCS = S.PROC_ORDER;
+const G_PROCS_EXT = S.PROC_ORDER.concat(PROC_COLORS['최종완료'] ? ['최종완료'] : []);
 const G_CLR = PROC_COLORS;
 
 const G_BATCH_PAL = [
@@ -143,14 +144,22 @@ function gMakeBar(sn, d, proc, dates) {
 
 function gGetSummaryBars(items, procList, dates) {
   var bars = [];
+  var dFirst = dates[0], dLast = dates[dates.length - 1];
+  
   procList.forEach(function(proc) {
     var mn = '9999-12-31', mx = '2000-01-01';
     var hasData = false, hasProg = false, hasComp = true;
+    
     items.forEach(function(it) {
       if (!it.d) return;
       var p = window.getProc(it.d, proc);
       var s = window.fD(p.actualStart) || window.fD(p.planStart);
       var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
+      // 최종완료 특수 처리
+      if (proc === '최종완료') {
+        s = e = window.fD(it.d.completedAt);
+      }
+
       if (s || e) {
         hasData = true;
         if (s && s < mn) mn = s;
@@ -158,20 +167,27 @@ function gGetSummaryBars(items, procList, dates) {
         var ps = p.status || '대기';
         if (ps === '진행') hasProg = true;
         if (ps !== '완료') hasComp = false;
+        if (proc === '최종완료' && it.d.status !== '완료') hasComp = false;
       }
     });
+
     if (hasData && mn <= mx) {
-      var x1 = dates.indexOf(mn), x2 = dates.indexOf(mx);
-      if (x1 >= 0 && x2 >= 0) {
-        var sts = hasComp ? '완료' : (hasProg ? '진행' : '대기');
-        var bar = { x1:x1, x2:x2, proc:proc, status:sts, s:mn, e:mx };
-        var today = new Date().toISOString().slice(0,10);
-        if (sts !== '완료' && today > mx) {
-          bar.delayed = true;
-          bar.delayDays = Math.round((new Date(today+'T00:00:00') - new Date(mx+'T00:00:00')) / 86400000);
-        }
-        bars.push(bar);
+      if (mn > dLast || mx < dFirst) return; // 범위 밖
+      
+      var x1 = dates.indexOf(mn);
+      if (x1 < 0) x1 = 0;
+      var x2 = dates.indexOf(mx);
+      if (x2 < 0) x2 = dates.length - 1;
+      
+      var sts = hasComp ? '완료' : (hasProg ? '진행' : '대기');
+      var bar = { x1:x1, x2:x2, proc:proc, status:sts, s:mn, e:mx, isSummary:true };
+      
+      var today = new Date().toISOString().slice(0,10);
+      if (sts !== '완료' && today > mx) {
+        bar.delayed = true;
+        bar.delayDays = Math.round((new Date(today+'T00:00:00') - new Date(mx+'T00:00:00')) / 86400000);
       }
+      bars.push(bar);
     }
   });
   return bars;
@@ -265,7 +281,7 @@ function gBuildBatch(filtered, dates) {
     Object.keys(prods).forEach(function(p){ batchItems = batchItems.concat(prods[p]); });
 
     rows.push({ type:'batchHead', key:bKey, bid:bid, count:batchItems.length,
-      expanded:ganttExpandState[bKey], color:gBatchColor(bid), bars: gGetSummaryBars(batchItems, G_PROCS, dates) });
+      expanded:ganttExpandState[bKey], color:gBatchColor(bid), bars: gGetSummaryBars(batchItems, G_PROCS_EXT, dates) });
 
     if (ganttExpandState[bKey]) {
       Object.keys(prods).sort().forEach(function(pname) {
@@ -274,7 +290,7 @@ function gBuildBatch(filtered, dates) {
         if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
 
         rows.push({ type:'batchProd', key:pKey, pname:pname, count:items.length,
-          bars:gGetSummaryBars(items, G_PROCS, dates), bid:bid, expanded:ganttExpandState[pKey] });
+          bars:gGetSummaryBars(items, G_PROCS_EXT, dates), bid:bid, expanded:ganttExpandState[pKey] });
         
         if (ganttExpandState[pKey]) {
           items.forEach(function(it) {
@@ -305,7 +321,7 @@ function gBuildProduct(filtered, dates) {
     if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = true;
 
     rows.push({ type:'prodHead', key:pKey, pname:pname, count:items.length,
-      expanded:ganttExpandState[pKey], bars: gGetSummaryBars(items, G_PROCS, dates) });
+      expanded:ganttExpandState[pKey], bars: gGetSummaryBars(items, G_PROCS_EXT, dates) });
 
     if (ganttExpandState[pKey]) {
       items.forEach(function(it) {
@@ -435,16 +451,19 @@ window.renderGantt = function renderGantt() {
       var left = b.x1 * ganttCellW;
       var w = Math.max((b.x2 - b.x1 + 1) * ganttCellW - 2, 4);
       var style = gBarStyle(b);
-      var label = b.bid || '';
+      var label = b.isSummary ? b.proc : (b.bid || '');
+      var h = b.isSummary ? 10 : (G_ROW - 12);
+      var top = b.isSummary ? 12 : 6;
+      
       if (ganttCellW >= 18 && label.length > 0) {
         var maxCh = Math.floor(w / 7);
-        if (label.length > maxCh) label = label.slice(0, maxCh-1) + '\u2026';
+        if (label.length > maxCh) label = b.isSummary ? '' : (label.slice(0, maxCh-1) + '\u2026');
       } else { label = ''; }
 
       var tip = (b.pname||'') + ' | ' + (b.bid||'') + ' | ' + b.proc + ' | ' + b.s + '~' + b.e + ' | ' + b.status;
       if (b.delayed) tip += ' | \uC9C0\uC5F0 ' + b.delayDays + '\uC77C';
 
-      bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:6px;height:'+(G_ROW-12)+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:9px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
+      bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:'+top+'px;height:'+h+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:9px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
       bH += label;
       bH += '</div>';
 
@@ -452,7 +471,7 @@ window.renderGantt = function renderGantt() {
       if (b.delayed && b.x2over) {
         var dLeft = (b.x2 + 1) * ganttCellW;
         var dW = (b.x2over - b.x2) * ganttCellW;
-        bH += '<div title="\uC9C0\uC5F0 '+b.delayDays+'\uC77C" style="position:absolute;left:'+dLeft+'px;top:6px;height:'+(G_ROW-12)+'px;border-radius:0 4px 4px 0;background:#ef4444;opacity:0.7;width:'+dW+'px;background-image:repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(255,255,255,0.2) 3px,rgba(255,255,255,0.2) 6px)"></div>';
+        bH += '<div title="\uC9C0\uC5F0 '+b.delayDays+'\uC77C" style="position:absolute;left:'+dLeft+'px;top:'+top+'px;height:'+h+'px;border-radius:0 4px 4px 0;background:#ef4444;opacity:0.7;width:'+dW+'px;background-image:repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(255,255,255,0.2) 3px,rgba(255,255,255,0.2) 6px)"></div>';
       }
     });
 
