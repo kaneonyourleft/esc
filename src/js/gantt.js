@@ -4,7 +4,7 @@
 // =============================================
 
 import * as S from './state.js';
-import { PROC_COLORS } from './constants.js';
+import { PROC_COLORS, PROC_ORDER } from './constants.js';
 
 let ganttViewMode2 = 'process';
 let ganttCellW = 28;
@@ -12,8 +12,8 @@ let ganttExpandState = {};
 
 const G_ROW = 34;
 const G_HEAD = 28;
-const G_PROCS = S.PROC_ORDER;
-const G_PROCS_EXT = S.PROC_ORDER.concat(PROC_COLORS['최종완료'] ? ['최종완료'] : []);
+const G_PROCS = PROC_ORDER;
+const G_PROCS_EXT = PROC_ORDER.concat(['최종완료']);
 const G_CLR = PROC_COLORS;
 
 const G_BATCH_PAL = [

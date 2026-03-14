@@ -890,7 +890,7 @@ window.renderWorkspace = function renderWorkspace() {
         groups[curProc][equip][batch][product].push([sn, d]);
       });
 
-      const procs = Object.keys(groups).sort((a, b) => PROC_ORDER.indexOf(a) - PROC_ORDER.indexOf(b));
+      const procs = Object.keys(groups).sort((a, b) => S.PROC_ORDER.indexOf(a) - S.PROC_ORDER.indexOf(b));
       procs.forEach(proc => {
         const equips = groups[proc];
         const allItems = Object.values(equips).flatMap(e => Object.values(e).flatMap(b => Object.values(b).flat()));
@@ -1307,6 +1307,11 @@ window.calNext = function() {
   renderCalendar();
 };
 
+// --- 캘린더 유틸 ---
+function fM(date) {
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
 window.calToday = function() {
   S.set('calDate', new Date());
   renderCalendar();
@@ -1315,10 +1320,21 @@ window.calToday = function() {
 function renderCalendar() {
   const container = document.getElementById('calContent');
   if (!container) return;
+  if (S.calViewMode === 'issues') {
+    document.getElementById('calTitle').textContent = '이슈보드';
+    renderIssueBoard(container);
+    return;
+  }
+  if (S.calViewMode === 'week') {
+    const start = new Date(S.calDate);
+    start.setDate(start.getDate() - start.getDay());
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    document.getElementById('calTitle').textContent = `${fM(start)} ~ ${fM(end)}`;
+    renderWeekView(container);
+    return;
+  }
   document.getElementById('calTitle').textContent = `${S.calDate.getFullYear()}년 ${S.calDate.getMonth() + 1}월`;
-
-  if (S.calViewMode === 'issues') { renderIssueBoard(container); return; }
-  if (S.calViewMode === 'week') { renderWeekView(container); return; }
 
   const year = S.calDate.getFullYear();
   const month = S.calDate.getMonth();
@@ -1329,34 +1345,7 @@ function renderCalendar() {
   const today = new Date().toISOString().split('T')[0];
 
   // 이벤트 수집
-  let events = {};
-  function addEvent(date, ev) {
-    if (!date) return;
-    if (!events[date]) events[date] = [];
-    events[date].push(ev);
-  }
-
-  Object.entries(S.DATA).forEach(([sn, d]) => {
-    const route = getRoute(sn, d);
-    const prodName = d.productName || extractCategory(sn) || '기타';
-    route.forEach(proc => {
-      const p = getProc(d, proc);
-      const eq = p.equip || '';
-      const ps = fD(p.planStart || p.actualStart);
-      const pe = fD(p.planEnd || p.actualEnd);
-      const ae = fD(p.actualEnd);
-      if (ps) addEvent(ps, { sn, proc, type: '시작', status: p.status || '대기', equip: eq, productName: prodName });
-      if (pe) addEvent(pe, { sn, proc, type: '예정종료', status: p.status || '대기', equip: eq, productName: prodName });
-      if (ae && ae !== pe) addEvent(ae, { sn, proc, type: '완료', status: '완료', equip: eq, productName: prodName });
-    });
-    const ed = fD(d.endDate);
-    if (ed) addEvent(ed, { sn, proc: '납기', type: '마감', status: d.status || '대기', equip: '', productName: d.productName || '기타' });
-
-    const ca = fD(d.completedAt);
-    if (ca && d.status === '완료') {
-      addEvent(ca, { sn, proc: '최종완료', type: '완료', status: '완료', equip: '', productName: d.productName || '기타' });
-    }
-  });
+  const events = getCalendarEvents();
 
   // 통계
   let startCount = 0, doneCount = 0, deadlineCount = 0, eventDays = new Set();
@@ -1430,7 +1419,7 @@ function renderCalendar() {
 
   // 범례
   html += '<div class="cal-legend" style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--t2)">';
-  PROC_ORDER.forEach(proc => {
+  S.PROC_ORDER.forEach(proc => {
     html += `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PROC_COLORS[proc]};margin-right:4px"></span>${proc}</span>`;
   });
   html += `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PROC_COLORS['최종완료']};margin-right:4px"></span>최종완료</span>`;
@@ -1439,11 +1428,128 @@ function renderCalendar() {
   html += '</div>';
 
   container.innerHTML = html;
-  container.addEventListener('click', function(e) {
-    const cell = e.target.closest('[data-cal-date]');
-    if (cell) window.openCalDayModal(cell.dataset.calDate);
+  container.querySelectorAll('[data-cal-date]').forEach(el => {
+    el.onclick = () => window.openCalDayModal(el.dataset.calDate);
   });
 }
+
+function renderWeekView(container) {
+  const start = new Date(S.calDate);
+  start.setDate(start.getDate() - start.getDay());
+  
+  const today = new Date().toISOString().split('T')[0];
+  const events = getCalendarEvents();
+  
+  let html = '<div class="cal-week-grid" style="display:grid;grid-template-columns:repeat(7, 1fr);gap:12px;height:100%;min-height:400px">';
+  
+  const dows = ['일', '월', '화', '수', '목', '금', '토'];
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(start);
+    cur.setDate(cur.getDate() + i);
+    const ds = fD(cur);
+    const isToday = ds === today;
+    const isWknd = i === 0 || i === 6;
+    const dayEvents = events[ds] || [];
+    
+    html += `<div class="cal-week-col ${isToday ? 'cal-today' : ''}" style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:8px;background:var(--bg2);overflow:hidden">
+      <div style="padding:8px;text-align:center;background:${isToday ? 'var(--ac2)' : 'var(--bg3)'};color:${isToday ? '#fff' : 'inherit'};border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;opacity:0.8">${dows[i]}</div>
+        <div style="font-size:18px;font-weight:700">${cur.getDate()}</div>
+      </div>
+      <div style="flex:1;padding:8px;overflow-y:auto;display:flex;flex-direction:column;gap:6px" data-cal-date="${ds}">`;
+      
+    dayEvents.forEach(ev => {
+      const color = ev.proc === '납기' ? '#ef4444' : (PROC_COLORS[ev.proc] || '#6366f1');
+      const icon = ev.type === '마감' ? '🚩' : ev.type === '완료' ? '✅' : '🟢';
+      const eqHtml = ev.equip ? `<div style="font-size:10px;color:var(--t3)">${ev.equip}</div>` : '';
+      html += `<div class="cal-event-card" style="padding:6px 8px;border-radius:6px;background:var(--bg1);border-left:4px solid ${color};font-size:11px;box-shadow:var(--sh1)">
+        <div style="font-weight:600;color:${color}">${icon} ${ev.proc}</div>
+        <div style="margin-top:2px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.productName}</div>
+        <div style="font-size:10px;color:var(--t2)">${ev.sn}</div>
+        ${eqHtml}
+      </div>`;
+    });
+    
+    if (dayEvents.length === 0) {
+      html += `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:11px">일정 없음</div>`;
+    }
+    
+    html += `</div></div>`;
+  }
+  html += '</div>';
+  
+  container.innerHTML = html;
+  container.querySelectorAll('[data-cal-date]').forEach(el => {
+    el.onclick = () => window.openCalDayModal(el.dataset.calDate);
+  });
+}
+
+function renderIssueBoard(container) {
+  const statuses = ['검토중', '조치중', '완료'];
+  const colors = ['#f59e0b', '#3b82f6', '#10b981'];
+  
+  let html = '<div class="issue-board" style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px;height:600px">';
+  
+  statuses.forEach((status, idx) => {
+    const list = S.ISSUES.filter(i => (i.status || '검토중') === status);
+    html += `<div class="issue-col" style="display:flex;flex-direction:column;background:var(--bg2);border-radius:10px;padding:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid ${colors[idx]}">
+        <span style="font-weight:700;font-size:14px">${status}</span>
+        <span class="badge" style="background:var(--bg3);color:var(--t2);font-size:11px">${list.length}</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px">`;
+      
+    list.forEach(item => {
+      html += `<div onclick="window.openIssueDetail('${item.id}')" style="background:var(--bg1);border-radius:8px;padding:12px;box-shadow:var(--sh1);cursor:pointer;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">${esc(item.content)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--t2)">
+          <span>${item.product || '일반'}</span>
+          <span>${fD(item.date)}</span>
+        </div>
+        ${item.sn ? `<div style="margin-top:6px;font-size:10px;color:var(--t3);background:var(--bg2);padding:2px 6px;border-radius:4px;display:inline-block">${item.sn}</div>` : ''}
+      </div>`;
+    });
+    
+    html += '</div></div>';
+  });
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getCalendarEvents() {
+  let events = {};
+  function addEvent(date, ev) {
+    if (!date) return;
+    if (!events[date]) events[date] = [];
+    events[date].push(ev);
+  }
+
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    const route = getRoute(sn, d);
+    const prodName = d.productName || extractCategory(sn) || '기타';
+    route.forEach(proc => {
+      const p = getProc(d, proc);
+      const eq = p.equip || '';
+      const ps = fD(p.planStart || p.actualStart);
+      const pe = fD(p.planEnd || p.actualEnd);
+      const ae = fD(p.actualEnd);
+      if (ps) addEvent(ps, { sn, proc, type: '시작', status: p.status || '대기', equip: eq, productName: prodName });
+      if (pe) addEvent(pe, { sn, proc, type: '예정종료', status: p.status || '대기', equip: eq, productName: prodName });
+      if (ae && ae !== pe) addEvent(ae, { sn, proc, type: '완료', status: '완료', equip: eq, productName: prodName });
+    });
+    const ed = fD(d.endDate);
+    if (ed) addEvent(ed, { sn, proc: '납기', type: '마감', status: d.status || '대기', equip: '', productName: d.productName || '기타' });
+    const ca = fD(d.completedAt);
+    if (ca && d.status === '완료') addEvent(ca, { sn, proc: '최종완료', type: '완료', status: '완료', equip: '', productName: d.productName || '기타' });
+  });
+  return events;
+}
+
+// placeholder for issue detail
+window.openIssueDetail = function(id) {
+  toast('이슈 상세 정보는 준비중입니다.');
+};
 
 window.openCalDayModal = function(date) {
   let items = [];
@@ -1571,64 +1677,6 @@ window.openCalDayModal = function(date) {
   });
 };
 
-function renderWeekView(container) {
-    const today = new Date().toISOString().split('T')[0];
-  const base = new Date(S.calDate);
-  const dow = base.getDay();
-  base.setDate(base.getDate() - dow);
-
-  let html = '<div class="week-view">';
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(base);
-    d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
-    const isToday = dateStr === today;
-    const dayLabel = ['일', '월', '화', '수', '목', '금', '토'][i];
-
-    let dayItems = [];
-    Object.entries(S.DATA).forEach(([sn, data]) => {
-      getRoute(sn, data).forEach(proc => {
-        const p = getProc(data, proc);
-        if (fD(p.planStart) === dateStr || fD(p.actualStart) === dateStr || fD(p.planEnd) === dateStr || fD(p.actualEnd) === dateStr) {
-          dayItems.push({ sn, proc, data: p });
-        }
-      });
-    });
-
-    html += `<div class="week-day ${isToday ? 'week-today' : ''}" style="border:1px solid var(--border);border-radius:8px;padding:10px;${isToday ? 'border-color:var(--ac2)' : ''}">
-      <div style="font-weight:600;font-size:13px;margin-bottom:6px">${dayLabel} ${d.getDate()}일</div>`;
-
-    dayItems.forEach(item => {
-      html += `<div style="font-size:11px;padding:3px 6px;margin-bottom:3px;border-radius:4px;background:${PROC_COLORS[item.proc] || '#666'}22;color:${PROC_COLORS[item.proc] || 'var(--t1)'};cursor:pointer" onclick="openSidePanel('${esc(item.sn)}')">${esc(item.sn)} / ${esc(item.proc)}</div>`;
-    });
-    if (!dayItems.length) html += '<div style="font-size:11px;color:var(--t2)">일정 없음</div>';
-    html += '</div>';
-  }
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-function renderIssueBoard(container) {
-  const types = ['메모', '지시', '불량', '폐기', '기타'];
-  let html = '<div class="issue-board" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">';
-  types.forEach(type => {
-    const filtered = S.ISSUES.filter(i => (i.type || '기타') === type);
-    html += `<div class="card"><div class="card-title">${esc(type)} (${filtered.length})</div>`;
-    filtered.slice(0, 10).forEach(issue => {
-      html += `<div style="padding:6px;margin-bottom:4px;background:var(--bg4);border-radius:6px;font-size:12px">
-        <div style="color:var(--t2);font-size:10px">${fmt(fD(issue.date))}</div>
-        <div>${esc(issue.content || '-')}</div>
-        ${issue.sn ? `<div style="font-size:10px;color:var(--ac2)">${esc(issue.sn)}</div>` : ''}
-      </div>`;
-    });
-    html += '</div>';
-  });
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-// === 간트차트 === (gantt.js로 분리됨)
-// renderGantt, setGanttView 등은 src/js/gantt.js에서 window에 등록
 function renderGantt() {
   if (typeof window.renderGantt === 'function') window.renderGantt();
 }
@@ -1706,7 +1754,7 @@ function renderAllCharts() {
   // 리드타임
   drawBarChart('leadtimeChart', () => {
     const plan = {}, actual = {};
-    PROC_ORDER.forEach(p => { plan[p] = []; actual[p] = []; });
+    S.PROC_ORDER.forEach(p => { plan[p] = []; actual[p] = []; });
     Object.entries(S.DATA).forEach(([sn, d]) => {
       const cat = extractCategory(sn);
       getRoute(sn, d).forEach(proc => {
@@ -1718,9 +1766,9 @@ function renderAllCharts() {
     });
     const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length * 10) / 10 : 0;
     return {
-      labels: PROC_ORDER,
-      values: PROC_ORDER.map(p => avg(plan[p])),
-      values2: PROC_ORDER.map(p => avg(actual[p])),
+      labels: S.PROC_ORDER,
+      values: S.PROC_ORDER.map(p => avg(plan[p])),
+      values2: S.PROC_ORDER.map(p => avg(actual[p])),
       color: '#6366f1', color2: '#f59e0b', legend: ['계획', '실제']
     };
   });
@@ -1745,7 +1793,7 @@ function renderAllCharts() {
   // 공정별 불량
   drawBarChart('defectProcChart', () => {
     const counts = {};
-    PROC_ORDER.forEach(p => counts[p] = 0);
+    S.PROC_ORDER.forEach(p => counts[p] = 0);
     Object.values(S.DATA).forEach(d => {
       getRoute('', d).forEach(proc => {
         const p = getProc(d, proc);
@@ -1753,9 +1801,9 @@ function renderAllCharts() {
       });
     });
     return {
-      labels: PROC_ORDER,
-      values: PROC_ORDER.map(p => counts[p] || 0),
-      colors: PROC_ORDER.map(p => PROC_COLORS[p])
+      labels: S.PROC_ORDER,
+      values: S.PROC_ORDER.map(p => counts[p] || 0),
+      colors: S.PROC_ORDER.map(p => PROC_COLORS[p])
     };
   });
 }
