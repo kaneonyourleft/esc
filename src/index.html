@@ -694,6 +694,34 @@
     </div>
   </div>
 
+  <!-- 공정 관리 모달 -->
+  <div class="modal-overlay hidden" id="processMgmtModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">⚙️ 공정 관리</div>
+        <button class="modal-close btn-icon" onclick="closeModal('processMgmtModal')">✕</button>
+      </div>
+      <div id="processMgmtBody" style="padding:16px 0"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-secondary" onclick="closeModal('processMgmtModal')">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 상태 관리 모달 -->
+  <div class="modal-overlay hidden" id="statusMgmtModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">🏷️ 상태 관리</div>
+        <button class="modal-close btn-icon" onclick="closeModal('statusMgmtModal')">✕</button>
+      </div>
+      <div id="statusMgmtBody" style="padding:16px 0"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-secondary" onclick="closeModal('statusMgmtModal')">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="./js/main.js"></script>
   <script type="module" src="./js/gantt.js"></script>
   <script type="module" src="./js/ai.js"></script>

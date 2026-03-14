@@ -332,20 +332,63 @@ window.toggleSidebar = function() {
 };
 
 window.openProcessMgmt = function() {
-  switchTab('settings');
-  setTimeout(() => {
-    const el = document.getElementById('setting-process');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
+  const modal = document.getElementById('processMgmtModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    renderProcessMgmt();
+  }
 };
 
 window.openStatusMgmt = function() {
-  switchTab('settings');
-  setTimeout(() => {
-    const el = document.getElementById('setting-status');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
+  const modal = document.getElementById('statusMgmtModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    renderStatusMgmt();
+  }
 };
+
+function renderProcessMgmt() {
+  const body = document.getElementById('processMgmtBody');
+  if (!body) return;
+  const processes = ['탈지', '소성', '환원소성', '평탄화', '도금', '열처리'];
+  body.innerHTML = `
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">현재 정전척 생산 시스템에 설정된 공정 순서입니다.</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${processes.map((p, i) => `
+        <div class="setting-row" style="background:var(--bg3);padding:10px 14px;border-radius:var(--r8);border:1px solid var(--border)">
+           <div style="display:flex;align-items:center;gap:10px">
+             <span style="font-weight:700;color:var(--ac1);font-family:monospace">${i+1}</span>
+             <span style="font-weight:600">${p}</span>
+           </div>
+           <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" disabled>수정</button>
+           </div>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" disabled>+ 공정 단계 추가 (준비중)</button>
+  `;
+}
+
+function renderStatusMgmt() {
+  const body = document.getElementById('statusMgmtBody');
+  if (!body) return;
+  const statuses = ['대기', '진행', '완료', '지연', '폐기'];
+  body.innerHTML = `
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">제품의 현재 상태를 나타내는 배지 목록입니다.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));gap:8px">
+      ${statuses.map(s => `
+        <div style="background:var(--bg3);padding:10px;border-radius:var(--r8);border:1px solid var(--border);text-align:center">
+           <div class="badge badge-${s === '대기' ? 'wait' : s === '진행' ? 'prog' : s === '완료' ? 'done' : s === '지연' ? 'delay' : 'ng'}" style="margin-bottom:8px">${s}</div>
+           <div style="display:flex;justify-content:center;gap:4px">
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" disabled>⚙️</button>
+           </div>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" disabled>+ 상태 종류 추가 (준비중)</button>
+  `;
+}
 
 function applyTheme() {
   document.body.classList.toggle('light-mode', !S.isDarkMode);
