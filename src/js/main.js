@@ -2161,6 +2161,17 @@ window.openSNModal = function() {
   populateProductSelects();
   const startEl = document.getElementById('sn_start');
   if (startEl) startEl.value = todayStr();
+  
+  // 시트번호(오늘 YYMMDD) 자동 입력
+  const sheetEl = document.getElementById('sn_sheet');
+  if (sheetEl && !sheetEl.value) {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    sheetEl.value = `${yy}${mm}${dd}`;
+  }
+
   const batches = new Set();
   Object.values(S.DATA).forEach(d => { if (d.batch) batches.add(d.batch); });
   const list = document.getElementById('batchList');
@@ -2170,7 +2181,19 @@ window.openSNModal = function() {
 
 window.autoBatchCode = function() {
   const now = new Date();
-  const code = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 900) + 100)}`;
+  const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-`;
+  
+  // 기존 데이터에서 오늘 날짜의 가장 높은 순번 찾기
+  let maxSeq = 0;
+  Object.values(S.DATA).forEach(d => {
+    if (d.batch && d.batch.startsWith(prefix)) {
+      const seqStr = d.batch.slice(prefix.length);
+      const seqNum = parseInt(seqStr);
+      if (!isNaN(seqNum) && seqNum > maxSeq) maxSeq = seqNum;
+    }
+  });
+  
+  const code = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
   const el = document.getElementById('sn_batch');
   if (el) el.value = code;
   if (window.updateSNPreview) window.updateSNPreview();
@@ -2205,12 +2228,19 @@ window.updateSNPreview = function() {
   const preview = document.getElementById('sn_preview');
   if (!preview) return;
   if (!prod || !sheet) { preview.textContent = '제품과 시트번호를 입력하세요'; return; }
+  
   const cat = prod.category || 'WN';
-  const name = (prod.name || '').replace(/\s/g, '');
+  let snName = (prod.name || '').replace(/\s/g, '').toUpperCase();
+  // 제품명이 카테고리로 시작하면 해당 접두어 제거 (VBA 방식)
+  if (snName.startsWith(cat.toUpperCase())) {
+    snName = snName.slice(cat.length);
+  }
+  
   let items = [];
   for (let i = 0; i < Math.min(qty, 50); i++) {
     const num = String(seq + i).padStart(3, '0');
-    items.push(`${cat}${sheet}-${num}-${name}`);
+    // 형식: [분류][시트번호]-[제품코드]-L[순번]
+    items.push(`${cat}${sheet}-${snName}-L${num}`);
   }
   preview.innerHTML = items.map(s => `<div>${esc(s)}</div>`).join('');
 };
@@ -2226,15 +2256,21 @@ window.saveSNBatch = async function() {
   const prod = S.PRODUCTS[prodId];
   if (!prod || !sheet || !batch) { toast('필수 항목을 입력하세요', 'warn'); return; }
   if (!startDate) { toast('시작일을 입력하세요', 'warn'); return; }
+  
   const cat = prod.category || 'WN';
+  let snName = (prod.name || '').replace(/\s/g, '').toUpperCase();
+  if (snName.startsWith(cat.toUpperCase())) {
+    snName = snName.slice(cat.length);
+  }
+  
   const heat = prod.heat || 'N';
   const route = buildRoute(cat, heat);
-  const name = (prod.name || '').replace(/\s/g, '');
+  
   try {
     const wb = FB.writeBatch(firebaseDb);
     for (let i = 0; i < qty; i++) {
       const num = String(seq + i).padStart(3, '0');
-      const sn = `${cat}${sheet}-${num}-${name}`;
+      const sn = `${cat}${sheet}-${snName}-L${num}`;
       const processes = {};
       let cursor = startDate;
       route.forEach((proc, idx) => {
