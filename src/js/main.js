@@ -575,13 +575,11 @@ window.toggleGroup = function(key) {
 };
 
 window.toggleMonthGroup = function(monthKey) {
-  const body = document.getElementById('ws-month-' + monthKey.replace(/[^a-zA-Z0-9]/g, '-'));
-  const arrow = body?.previousElementSibling?.querySelector('.ws-month-arrow');
-  if (body) {
-    const isHidden = body.style.display === 'none';
-    body.style.display = isHidden ? '' : 'none';
-    if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
-  }
+  const mStateKey = 'month_' + monthKey;
+  S.wsGroupState[mStateKey] = !(S.wsGroupState[mStateKey] === undefined ? true : S.wsGroupState[mStateKey]);
+  // 상단 2개월 외에는 기본이 접힘(undefined -> false인 상태)이므로, 
+  // idx < 2 인 경우 undefined면 펼침 상태로 간주하여 토글 처리
+  renderWorkspace();
 };
 
 function updateFilterOptions() {
@@ -673,14 +671,20 @@ window.renderWorkspace = function renderWorkspace() {
   const sortedMonthKeys = Object.keys(months).sort((a, b) => {
     if (a === '기타') return 1;
     if (b === '기타') return -1;
-    return b.localeCompare(a);
+    return a.localeCompare(b); // 과거월부터 순서대로 (1월, 2월, 3월...)
   });
 
   let html = '';
   sortedMonthKeys.forEach((mKey, idx) => {
     const mData = months[mKey];
     const monthId = 'ws-month-' + mKey.replace(/[^a-zA-Z0-9]/g, '-');
-    const isExpanded = idx === 0; // 최신월만 펼침
+    const mStateKey = 'month_' + mKey;
+    
+    // 월 확장 상태: 상태가 없으면 아래쪽 2개(최신월)는 펼침, 나머지는 접힘
+    if (S.wsGroupState[mStateKey] === undefined) {
+      S.wsGroupState[mStateKey] = (idx >= sortedMonthKeys.length - 2);
+    }
+    const isMonthExpanded = S.wsGroupState[mStateKey];
     
     // 월별 요약 정보
     const batchSet = new Set();
@@ -692,11 +696,11 @@ window.renderWorkspace = function renderWorkspace() {
 
     html += `
       <div class="ws-month-header" onclick="toggleMonthGroup('${mKey}')">
-        <span class="ws-month-arrow">${isExpanded ? '▼' : '▶'}</span>
+        <span class="ws-month-arrow">${isMonthExpanded ? '▼' : '▶'}</span>
         <span class="ws-month-title">${formatMonth(mKey)}</span>
         <span class="ws-month-summary">배치 ${batchSet.size}개 · ${mData.length}매 · 완료 ${doneTotal}매</span>
       </div>
-      <div class="ws-month-body" id="${monthId}" style="display: ${isExpanded ? '' : 'none'}">
+      <div class="ws-month-body" id="${monthId}" style="display: ${isMonthExpanded ? '' : 'none'}">
     `;
 
     // mode별 그룹핑
@@ -724,15 +728,21 @@ window.renderWorkspace = function renderWorkspace() {
         const allItems = Object.values(equips).flatMap(e => Object.values(e).flatMap(b => Object.values(b).flat()));
         const doneCount = allItems.filter(([, d]) => (d.status || '대기') === '완료').length;
         const pct = Math.round(doneCount / allItems.length * 100);
+        
+        const groupKey = mKey + proc;
+        if (S.wsGroupState[groupKey] === undefined) {
+          S.wsGroupState[groupKey] = !isMonthExpanded; // collapsed 상태이므로 true면 접힘
+        }
+        const collapsed = S.wsGroupState[groupKey];
 
         html += `
           <div class="ws-group">
-            <div class="ws-group-header" onclick="toggleGroup('${esc(mKey + proc)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r4);margin-bottom:4px;user-select:none">
-              <span style="font-size:12px;transition:transform 0.2s;transform:rotate(${!S.wsGroupState[mKey + proc] ? '90' : '0'}deg)">▶</span>
+            <div class="ws-group-header" onclick="toggleGroup('${esc(groupKey)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r4);margin-bottom:4px;user-select:none">
+              <span style="font-size:12px;transition:transform 0.2s;transform:rotate(${collapsed ? '0' : '90'}deg)">▶</span>
               <span style="font-weight:600;font-size:14px;flex:1">${esc(proc)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${allItems.length}개)</span></span>
               <span style="font-size:12px;color:var(--t2)">${pct}% 완료 (${doneCount}/${allItems.length})</span>
             </div>
-            ${!S.wsGroupState[mKey + proc] ? `
+            ${!collapsed ? `
               <div style="margin-left:16px">
                 ${Object.keys(equips).sort().map(eq => {
                   const batches = equips[eq];
@@ -743,8 +753,9 @@ window.renderWorkspace = function renderWorkspace() {
                         ${Object.keys(batches).sort().map(ba => {
                           const prods = batches[ba];
                           return Object.keys(prods).sort().map(pr => {
-                            const items = prods[pr];
-                            return renderItemsTable(mKey + proc + eq + ba + pr, items, `${esc(ba)} · ${esc(pr)}`);
+                            const items = prods[pr].sort((a, b) => a[0].localeCompare(b[0]));
+                            const tableKey = groupKey + eq + ba + pr;
+                            return renderItemsTable(tableKey, items, `${esc(ba)} · ${esc(pr)}`, !isMonthExpanded);
                           }).join('');
                         }).join('')}
                       </div>
@@ -782,7 +793,9 @@ window.renderWorkspace = function renderWorkspace() {
           ? `${esc(mK)} <span style="font-size:12px;color:var(--t2);font-weight:400">(${allItems.length}개 LOT)</span>`
           : esc(mK);
         const groupStateKey = mKey + mK;
-        if (S.wsGroupState[groupStateKey] === undefined) S.wsGroupState[groupStateKey] = true;
+        if (S.wsGroupState[groupStateKey] === undefined) {
+          S.wsGroupState[groupStateKey] = !isMonthExpanded; 
+        }
         const collapsed = S.wsGroupState[groupStateKey];
 
         html += `
@@ -795,9 +808,10 @@ window.renderWorkspace = function renderWorkspace() {
             ${!collapsed ? `
               <div style="margin-left:16px">
                 ${Object.keys(subGroups).sort().map(sK => {
-                  const items = subGroups[sK];
+                  const items = subGroups[sK].sort((a, b) => a[0].localeCompare(b[0]));
                   const subLabel = S.wsViewMode === 'batch' ? '제품: ' + esc(sK) : '배치: ' + esc(sK);
-                  return renderItemsTable(groupStateKey + '::' + sK, items, subLabel);
+                  const tableKey = groupStateKey + '::' + sK;
+                  return renderItemsTable(tableKey, items, subLabel, !isMonthExpanded);
                 }).join('')}
               </div>
             ` : ''}
@@ -813,8 +827,8 @@ window.renderWorkspace = function renderWorkspace() {
   updateBatchBar();
 }
 
-function renderItemsTable(stateKey, items, label) {
-  if (S.wsGroupState[stateKey] === undefined) S.wsGroupState[stateKey] = false;
+function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
+  if (S.wsGroupState[stateKey] === undefined) S.wsGroupState[stateKey] = defaultCollapsed;
   const collapsed = S.wsGroupState[stateKey];
   const doneCount = items.filter(([, d]) => (d.status || '대기') === '완료').length;
 
