@@ -1357,8 +1357,8 @@ canvas { display: block; }
 .btn-icon:hover { background: var(--bg3); }
 .today-nav-btn { width: 40px; height: 40px; }
 
-/* === 반응형 (모바일) === */
-@media (max-width: 768px) {
+/* === 반응형 (모바일 & 태블릿) === */
+@media (max-width: 1024px) {
   #sidebarToggleBtn { display: flex !important; }
   #sidebar {
     display: flex !important;
@@ -1543,15 +1543,9 @@ canvas { display: block; }
   .briefing-stat { font-size: 12px; }
 }
 
-/* 태블릿 2컬럼 */
-@media (min-width: 768px) and (max-width: 1024px) {
-  #sidebar { display: none; }
-  #main { margin-left: 0; }
-  .grid4 { grid-template-columns: repeat(2, 1fr); }
-}
 
 /* 데스크톱 */
-@media (min-width: 1024px) {
+@media (min-width: 1025px) {
   #sidebar { position: fixed; }
 }
 
