@@ -1011,7 +1011,7 @@ function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
         <div class="table-responsive"><table class="table ws-table">
           <thead><tr>
             <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(stateKey)}',this.checked)"></th>
-            <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
+            <th>S/N / 제품명</th><th>상태</th><th>공정 / 설비</th><th>일정</th><th>진행</th>
           </tr></thead>
           <tbody>
             ${items.map(([sn, d]) => {
@@ -1027,19 +1027,34 @@ function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
               return `
                 <tr class="ws-row ${status === '지연' ? 'row-delay' : ''}" data-sn="${esc(sn)}">
                   <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
-                  <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
-                  <td>${statusBadge(status)}</td>
-                  <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
-                    <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
+                  <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;padding:8px 10px">
+                    <div style="font-weight:700;color:var(--ac2);font-size:13px">${esc(sn)}</div>
+                    <div style="font-size:10px;color:var(--t2);margin-top:2px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.productName || '-')}</div>
                   </td>
-                  <td class="equip-cell" onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="cursor:pointer" title="클릭하여 설비 변경">
-                    ${esc(equip || '-')} <span style="font-size:10px;color:var(--t2)">▼</span>
+                  <td>${statusBadge(status)}</td>
+                  <td class="proc-equip-cell" style="cursor:pointer;font-size:12px;min-width:110px">
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <span onclick="showProcDropdown(event,'${esc(sn)}')" style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:600">${esc(curProc || '-')}</span>
+                      <span onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="color:var(--t2);font-size:11px">
+                        ${esc(equip || '-')} <span style="font-size:9px">▼</span>
+                      </span>
+                    </div>
                   </td>
                   <td class="date-cell">
-                    <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" style="background:transparent;border:none;color:inherit;font-size:12px;width:120px">
+                    <div style="display:flex;flex-direction:column;gap:1px">
+                       <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" 
+                         style="background:transparent;border:none;color:inherit;font-size:11px;width:105px;padding:0;height:16px;cursor:pointer">
+                       <div style="font-size:10px;color:var(--t2);padding-left:2px">~ ${fmt(endDate)}</div>
+                    </div>
                   </td>
-                  <td style="font-size:12px">${fmt(endDate)}</td>
-                  <td><div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};border-radius:3px;transition:width 0.3s"></div></div><span style="font-size:11px;color:var(--t2)">${progress}%</span></div></td>
+                  <td style="width:80px">
+                    <div style="display:flex;align-items:center;gap:4px">
+                       <div style="flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden">
+                         <div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};transition:width 0.3s"></div>
+                       </div>
+                       <span style="font-size:10px;color:var(--t2);width:26px;text-align:right">${progress}%</span>
+                    </div>
+                  </td>
                 </tr>
               `;
             }).join('')}
