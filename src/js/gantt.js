@@ -251,8 +251,9 @@ function gBuildProcess(filtered, dates) {
 
       if (ganttExpandState[eqKey]) {
         items.forEach(function(it) {
-          var b = gMakeBar(it.sn, it.d, proc, dates);
-          rows.push({ type:'snLine', sn:it.sn, bars: b ? [b] : [], depth:2 });
+          var route = window.getRoute(it.sn, it.d);
+          var bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+          rows.push({ type:'snLine', sn:it.sn, bars: bars, depth:2 });
         });
       }
     });
@@ -451,13 +452,16 @@ window.renderGantt = function renderGantt() {
       var left = b.x1 * ganttCellW;
       var w = Math.max((b.x2 - b.x1 + 1) * ganttCellW - 2, 4);
       var style = gBarStyle(b);
-      var label = b.isSummary ? b.proc : (b.bid || '');
-      var h = b.isSummary ? 10 : (G_ROW - 12);
-      var top = b.isSummary ? 12 : 6;
+      var label = b.proc || b.bid || '';
+      var h = G_ROW - 12;
+      var top = 6;
       
       if (ganttCellW >= 18 && label.length > 0) {
         var maxCh = Math.floor(w / 7);
-        if (label.length > maxCh) label = b.isSummary ? '' : (label.slice(0, maxCh-1) + '\u2026');
+        if (label.length > maxCh) {
+          if (b.isSummary) label = ''; // 요약바는 글자 생략하는게 깔끔
+          else label = label.slice(0, maxCh-1) + '\u2026';
+        }
       } else { label = ''; }
 
       var tip = (b.pname||'') + ' | ' + (b.bid||'') + ' | ' + b.proc + ' | ' + b.s + '~' + b.e + ' | ' + b.status;
