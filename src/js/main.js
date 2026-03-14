@@ -297,7 +297,10 @@ window.switchTab = function(tab) {
   renderCurrentTab();
   if (window.innerWidth < 768) {
     S.set('sidebarCollapsed', true);
-    document.getElementById('sidebar').classList.add('collapsed');
+    const side = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (side) side.classList.add('collapsed');
+    if (overlay) overlay.classList.remove('visible');
   }
 };
 
@@ -314,8 +317,34 @@ function renderCurrentTab() {
 
 // === 사이드바, 테마 ===
 window.toggleSidebar = function() {
+  const isMobile = window.innerWidth < 768;
   S.set('sidebarCollapsed', !S.sidebarCollapsed);
-  document.getElementById('sidebar').classList.toggle('collapsed', S.sidebarCollapsed);
+  const side = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  
+  if (S.sidebarCollapsed) {
+    side.classList.add('collapsed');
+    if (overlay) overlay.classList.remove('visible');
+  } else {
+    side.classList.remove('collapsed');
+    if (isMobile && overlay) overlay.classList.add('visible');
+  }
+};
+
+window.openProcessMgmt = function() {
+  switchTab('settings');
+  setTimeout(() => {
+    const el = document.getElementById('setting-process');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+};
+
+window.openStatusMgmt = function() {
+  switchTab('settings');
+  setTimeout(() => {
+    const el = document.getElementById('setting-status');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
 };
 
 function applyTheme() {

@@ -178,7 +178,14 @@ body {
   height: 100vh;
   z-index: 200;
   overflow: hidden;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.2);
 }
+#sidebar-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199;
+  display: none; backdrop-filter: blur(4px);
+}
+#sidebar-overlay.visible { display: block; }
+
 #sidebar.collapsed {
   width: 0 !important;
   min-width: 0 !important;
@@ -265,7 +272,12 @@ body {
   opacity: 1;
   transition: 0.2s;
 }
-#sidebar.collapsed .sb-item-label { opacity: 0; width: 0; }
+#sidebar.collapsed .sb-item-label { opacity: 0; width: 0; display: none; }
+
+.sb-sub-items { margin-left: 20px; border-left: 1px solid var(--border); margin-bottom: 8px; }
+.sb-item.sb-sub { height: 36px; margin: 1px 8px; gap: 8px; }
+.sb-item.sb-sub .sb-item-label { font-size: 12px; }
+.sb-item.sb-sub svg { width: 14px; height: 14px; }
 
 .sb-bottom {
   padding: 12px;
@@ -1347,23 +1359,35 @@ canvas { display: block; }
 
 /* === 반응형 (모바일) === */
 @media (max-width: 768px) {
-  #sidebar, #sidebarToggleBtn { display: none !important; }
+  #sidebarToggleBtn { display: flex !important; }
+  #sidebar {
+    display: flex !important;
+    left: 0;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(0);
+    box-shadow: 8px 0 32px rgba(0,0,0,0.4);
+    z-index: 1000;
+  }
+  #sidebar.collapsed {
+    transform: translateX(-100%);
+    width: var(--sb) !important;
+  }
 
   #main {
     margin-left: 0 !important;
-    height: 100dvh; height: 100vh;
+    height: 100vh;
     display: flex; flex-direction: column; overflow: hidden;
   }
   #topbar {
     position: relative; flex-shrink: 0;
-    padding: 0 8px; gap: 4px;
+    padding: 0 12px; gap: 8px;
     height: var(--tb); min-height: var(--tb);
   }
-  #bottomBar { display: flex !important; }
+  #bottomBar { display: none !important; }
   #content {
     flex: 1 1 0%; overflow-x: hidden; overflow-y: auto;
-    -webkit-overflow-scrolling: touch; padding: 10px;
-    padding-bottom: calc(var(--bb) + 16px); min-height: 0;
+    -webkit-overflow-scrolling: touch; padding: 12px;
+    padding-bottom: 24px; min-height: 0;
   }
 
   .tb-title {
