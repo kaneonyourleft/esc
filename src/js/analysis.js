@@ -1,5 +1,5 @@
 import * as S from './state.js';
-import { PROC_ORDER, PROC_COLORS } from './constants.js';
+import { PROC_COLORS } from './constants.js';
 import { fD } from './utils.js';
 
 export function renderAnalysis() {
@@ -234,7 +234,7 @@ function drawLeadtimeChart() {
   canvas.width = W; canvas.height = 240;
   ctx.clearRect(0, 0, W, 240);
   const planAvg = {}, actualAvg = {};
-  PROC_ORDER.forEach(p => {
+  S.PROC_ORDER.forEach(p => {
     const days = [], actDays = [];
     Object.values(S.DATA).forEach(item => {
       const proc = (item.processes || {})[p];
@@ -248,10 +248,10 @@ function drawLeadtimeChart() {
   });
   const max = Math.max(...Object.values(planAvg), ...Object.values(actualAvg), 1);
   const pad = 30;
-  const bw = Math.floor((W - pad * 2) / PROC_ORDER.length / 2 - 4);
+  const bw = Math.floor((W - pad * 2) / S.PROC_ORDER.length / 2 - 4);
   const availH = 180;
-  PROC_ORDER.forEach((p, i) => {
-    const x = pad + (W - pad * 2) / PROC_ORDER.length * i + (W - pad * 2) / PROC_ORDER.length / 2;
+  S.PROC_ORDER.forEach((p, i) => {
+    const x = pad + (W - pad * 2) / S.PROC_ORDER.length * i + (W - pad * 2) / S.PROC_ORDER.length / 2;
     const ph = planAvg[p] / max * availH;
     const ah = actualAvg[p] / max * availH;
     ctx.fillStyle = 'rgba(99,102,241,0.7)';

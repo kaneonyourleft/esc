@@ -1,9 +1,9 @@
-﻿/* ============================================================
+/* ============================================================
    home.js – 홈 탭 렌더링
    ESC Manager v10 – Module Split (복구)
    ============================================================ */
 import * as S from './state.js';
-import { PROC_ORDER, PROC_COLORS, DEFAULT_WIDGETS } from './constants.js';
+import { PROC_COLORS, DEFAULT_WIDGETS } from './constants.js';
 import { fD, todayStr, statusBadge, toast, getWidgetConfig, esc, calcProgress, getDplus } from './utils.js';
 
 function renderHome() {
@@ -65,7 +65,7 @@ function renderKpiWidget() {
 
 function renderPipelineWidget() {
   let stats = {};
-  PROC_ORDER.forEach(p => stats[p] = { total: 0, done: 0 });
+  S.PROC_ORDER.forEach(p => stats[p] = { total: 0, done: 0 });
   Object.entries(DATA).forEach(([sn, d]) => {
     getRoute(sn, d).forEach(proc => {
       if (!stats[proc]) stats[proc] = { total: 0, done: 0 };
@@ -74,7 +74,7 @@ function renderPipelineWidget() {
     });
   });
   let html = '<div class="card"><div class="card-title">공정 파이프라인</div><div class="pipeline-grid">';
-  PROC_ORDER.forEach(proc => {
+  S.PROC_ORDER.forEach(proc => {
     const s = stats[proc] || { total: 0, done: 0 };
     const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
     html += `<div class="pipeline-item"><div class="pipeline-bar" style="background:${PROC_COLORS[proc] || '#666'};width:${pct}%"></div><div class="pipeline-info"><span style="color:${PROC_COLORS[proc] || '#666'};font-weight:600">${esc(proc)}</span><span>${s.done}/${s.total}</span></div></div>`;

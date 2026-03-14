@@ -1,5 +1,5 @@
 import * as S from './state.js';
-import { PROC_ORDER, PROC_COLORS, EQ_MAP, DEFAULT_WIDGETS } from './constants.js';
+import { PROC_COLORS, EQ_MAP, DEFAULT_WIDGETS } from './constants.js';
 import { handleFirestoreError, toast, openModal, closeModal, statusBadge, esc } from './app-utils.js';
 import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, getEquipList, calcProgress, extractCategory, extractBatchFromSN, positionDropdown, handleEmptyChart, mdToHtml, getInputMonth, formatMonth } from './utils.js';
 import { renderTodayView } from './today-view.js';
@@ -204,6 +204,24 @@ function subscribeData() {
     updateDataStats();
   }, (err) => { handleFirestoreError(err, '데이터 로드'); }));
 
+  // 설정 로드 (공정, 상태)
+  const configCol = FB.collection(firebaseDb, 'config');
+  FB.onSnapshot(configCol, (snap) => {
+    snap.forEach(d => {
+      if (d.id === 'process') {
+        const steps = d.data().steps;
+        if (steps && Array.isArray(steps)) S.set('PROC_ORDER', steps);
+      }
+      if (d.id === 'status') {
+        const list = d.data().list;
+        if (list && Array.isArray(list)) S.set('STATUS_LIST', list);
+      }
+    });
+    // 모달이 열려있으면 리렌더링
+    if (!document.getElementById('processMgmtModal').classList.contains('hidden')) renderProcessMgmt();
+    if (!document.getElementById('statusMgmtModal').classList.contains('hidden')) renderStatusMgmt();
+  });
+
   const prodMaster = FB.collection(firebaseDb, 'products');
   FB.getDocs(prodMaster).then(snap => {
     const newProducts = {};
@@ -347,46 +365,124 @@ window.openStatusMgmt = function() {
   }
 };
 
+window.saveConfig = async function(type, data) {
+  try {
+    const docRef = FB.doc(firebaseDb, 'config', type);
+    await FB.setDoc(docRef, data);
+    toast('✅ 설정이 저장되었습니다', 'success');
+  } catch (e) {
+    handleFirestoreError(e, '설정 저장');
+  }
+};
+
+window.addProcessStep = async function() {
+  const name = prompt('새로운 공정 단계 이름을 입력하세요:');
+  if (!name) return;
+  if (S.PROC_ORDER.includes(name)) return toast('이미 존재하는 공정입니다', 'warn');
+  const newList = [...S.PROC_ORDER, name];
+  await window.saveConfig('process', { steps: newList });
+};
+
+window.editProcessStep = async function(index) {
+  const oldName = S.PROC_ORDER[index];
+  const newName = prompt('수정할 공정 이름을 입력하세요:', oldName);
+  if (!newName || newName === oldName) return;
+  const newList = [...S.PROC_ORDER];
+  newList[index] = newName;
+  await window.saveConfig('process', { steps: newList });
+};
+
+window.deleteProcessStep = async function(index) {
+  if (!confirm(`'${S.PROC_ORDER[index]}' 공정을 삭제하시겠습니까?`)) return;
+  const newList = S.PROC_ORDER.filter((_, i) => i !== index);
+  await window.saveConfig('process', { steps: newList });
+};
+
+window.addStatusType = async function() {
+  const name = prompt('새로운 상태 이름을 입력하세요:');
+  if (!name) return;
+  if (S.STATUS_LIST.includes(name)) return toast('이미 존재하는 상태입니다', 'warn');
+  const newList = [...S.STATUS_LIST, name];
+  await window.saveConfig('status', { list: newList });
+};
+
+window.editStatusType = async function(index) {
+  const oldName = S.STATUS_LIST[index];
+  const newName = prompt('수정할 상태 이름을 입력하세요:', oldName);
+  if (!newName || newName === oldName) return;
+  const newList = [...S.STATUS_LIST];
+  newList[index] = newName;
+  await window.saveConfig('status', { list: newList });
+};
+
+window.deleteStatusType = async function(index) {
+  if (!confirm(`'${S.STATUS_LIST[index]}' 상태를 삭제하시겠습니까?`)) return;
+  const newList = S.STATUS_LIST.filter((_, i) => i !== index);
+  await window.saveConfig('status', { list: newList });
+};
+
+window.moveProcessStep = async function(index, dir) {
+  const newList = [...S.PROC_ORDER];
+  const target = index + dir;
+  if (target < 0 || target >= newList.length) return;
+  [newList[index], newList[target]] = [newList[target], newList[index]];
+  await window.saveConfig('process', { steps: newList });
+};
+
 function renderProcessMgmt() {
   const body = document.getElementById('processMgmtBody');
   if (!body) return;
-  const processes = ['탈지', '소성', '환원소성', '평탄화', '도금', '열처리'];
+  const processes = S.PROC_ORDER;
   body.innerHTML = `
-    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">현재 정전척 생산 시스템에 설정된 공정 순서입니다.</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">생산 관리 시스템의 공정 순서를 관리합니다. 화살표를 눌러 순서를 변경할 수 있습니다.</div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${processes.map((p, i) => `
         <div class="setting-row" style="background:var(--bg3);padding:10px 14px;border-radius:var(--r8);border:1px solid var(--border)">
-           <div style="display:flex;align-items:center;gap:10px">
-             <span style="font-weight:700;color:var(--ac1);font-family:monospace">${i+1}</span>
+           <div style="display:flex;align-items:center;gap:10px;flex:1">
+             <span style="font-weight:700;color:var(--ac1);font-family:monospace;width:14px">${i+1}</span>
              <span style="font-weight:600">${p}</span>
            </div>
-           <div style="display:flex;gap:6px">
-              <button class="btn btn-secondary btn-sm" disabled>수정</button>
+           <div style="display:flex;gap:4px">
+              <button class="btn btn-secondary btn-sm" style="padding:4px 8px" onclick="moveProcessStep(${i},-1)" ${i===0?'disabled':''}>↑</button>
+              <button class="btn btn-secondary btn-sm" style="padding:4px 8px" onclick="moveProcessStep(${i},1)" ${i===processes.length-1?'disabled':''}>↓</button>
+              <button class="btn btn-secondary btn-sm" onclick="editProcessStep(${i})">수정</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteProcessStep(${i})">삭제</button>
            </div>
         </div>
       `).join('')}
     </div>
-    <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" disabled>+ 공정 단계 추가 (준비중)</button>
+    <button class="btn btn-primary btn-sm" style="margin-top:16px;width:100%" onclick="addProcessStep()">+ 공정 단계 추가</button>
   `;
 }
+
+window.moveStatusType = async function(index, dir) {
+  const newList = [...S.STATUS_LIST];
+  const target = index + dir;
+  if (target < 0 || target >= newList.length) return;
+  [newList[index], newList[target]] = [newList[target], newList[index]];
+  await window.saveConfig('status', { list: newList });
+};
 
 function renderStatusMgmt() {
   const body = document.getElementById('statusMgmtBody');
   if (!body) return;
-  const statuses = ['대기', '진행', '완료', '지연', '폐기'];
+  const statuses = S.STATUS_LIST;
   body.innerHTML = `
-    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">제품의 현재 상태를 나타내는 배지 목록입니다.</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">시스템 전체에서 사용되는 상태 배지 목록입니다. 화살표로 순서를 변경할 수 있습니다.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));gap:8px">
-      ${statuses.map(s => `
+      ${statuses.map((s, i) => `
         <div style="background:var(--bg3);padding:10px;border-radius:var(--r8);border:1px solid var(--border);text-align:center">
-           <div class="badge badge-${s === '대기' ? 'wait' : s === '진행' ? 'prog' : s === '완료' ? 'done' : s === '지연' ? 'delay' : 'ng'}" style="margin-bottom:8px">${s}</div>
+           <div class="badge badge-${s === '대기' ? 'wait' : s === '진행' ? 'prog' : s === '완료' ? 'done' : s === '지연' ? 'delay' : s === '폐기' ? 'ng' : 'wait'}" style="margin-bottom:8px">${s}</div>
            <div style="display:flex;justify-content:center;gap:4px">
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" disabled>⚙️</button>
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" onclick="moveStatusType(${i},-1)" ${i===0?'disabled':''}>↑</button>
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" onclick="moveStatusType(${i},1)" ${i===statuses.length-1?'disabled':''}>↓</button>
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" onclick="editStatusType(${i})">⚙️</button>
+              <button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteStatusType(${i})">✕</button>
            </div>
         </div>
       `).join('')}
     </div>
-    <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" disabled>+ 상태 종류 추가 (준비중)</button>
+    <button class="btn btn-primary btn-sm" style="margin-top:16px;width:100%" onclick="addStatusType()">+ 상태 추가</button>
   `;
 }
 
@@ -537,7 +633,7 @@ function renderKpiWidget() {
 
 function renderPipelineWidget() {
   let stats = {};
-  PROC_ORDER.forEach(p => stats[p] = { total: 0, done: 0 });
+  S.PROC_ORDER.forEach(p => stats[p] = { total: 0, done: 0 });
   Object.entries(S.DATA).forEach(([sn, d]) => {
     getRoute(sn, d).forEach(proc => {
       if (!stats[proc]) stats[proc] = { total: 0, done: 0 };
@@ -546,7 +642,7 @@ function renderPipelineWidget() {
     });
   });
   let html = '<div class="card"><div class="card-title">공정 파이프라인</div><div class="pipeline-grid">';
-  PROC_ORDER.forEach(proc => {
+  S.PROC_ORDER.forEach(proc => {
     const s = stats[proc] || { total: 0, done: 0 };
     const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
     html += `<div class="pipeline-item"><div class="pipeline-bar" style="background:${PROC_COLORS[proc] || '#666'};width:${pct}%"></div><div class="pipeline-info"><span style="color:${PROC_COLORS[proc] || '#666'};font-weight:600">${esc(proc)}</span><span>${s.done}/${s.total}</span></div></div>`;

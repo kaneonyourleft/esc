@@ -20,6 +20,8 @@ export let wsAllExpanded = false;
 export let ganttAllExpanded = false;
 export let miniChatOpen = false;
 export let widgetCache = null;
+export let PROC_ORDER = ['탈지', '소성', '환원소성', '평탄화', '도금', '열처리'];
+export let STATUS_LIST = ['대기', '진행', '완료', '지연', '폐기'];
 export let scheduleRenderRAF = null;
 export let unsubProduction = null;
 export let unsubIssues = null;
@@ -47,6 +49,8 @@ export function set(key, value) {
     case 'ganttAllExpanded': ganttAllExpanded = value; break;
     case 'miniChatOpen': miniChatOpen = value; break;
     case 'widgetCache': widgetCache = value; break;
+    case 'PROC_ORDER': PROC_ORDER = value; break;
+    case 'STATUS_LIST': STATUS_LIST = value; break;
     case 'scheduleRenderRAF': scheduleRenderRAF = value; break;
     case 'unsubProduction': unsubProduction = value; break;
     case 'unsubIssues': unsubIssues = value; break;

@@ -146,9 +146,7 @@ function renderTaskCard(group, uid, isDelayed) {
     actionBtn = `<div class="exec-action-done">완료됨</div>`;
   }
 
-  // 공정 바 (PROC_ORDER 순서)
-  const PROC_ORDER = ['탈지','소성','환원소성','평탄화','도금','열처리'];
-  const procBar = PROC_ORDER.map(p => {
+  const procBar = S.PROC_ORDER.map(p => {
     const active = p === group.process;
     const clr = PROC_COLORS[p] || '#888';
     return `<span class="exec-proc-pip${active ? ' exec-proc-pip-active' : ''}"
