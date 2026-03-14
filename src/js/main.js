@@ -1351,6 +1351,11 @@ function renderCalendar() {
     });
     const ed = fD(d.endDate);
     if (ed) addEvent(ed, { sn, proc: '납기', type: '마감', status: d.status || '대기', equip: '', productName: d.productName || '기타' });
+
+    const ca = fD(d.completedAt);
+    if (ca && d.status === '완료') {
+      addEvent(ca, { sn, proc: '최종완료', type: '완료', status: '완료', equip: '', productName: d.productName || '기타' });
+    }
   });
 
   // 통계
@@ -1428,6 +1433,7 @@ function renderCalendar() {
   PROC_ORDER.forEach(proc => {
     html += `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PROC_COLORS[proc]};margin-right:4px"></span>${proc}</span>`;
   });
+  html += `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PROC_COLORS['최종완료']};margin-right:4px"></span>최종완료</span>`;
   html += '<span><span style="color:#ef4444;margin-right:4px">●</span>납기</span>';
   html += '<span><span style="color:var(--suc);margin-right:4px">✓</span>완료</span>';
   html += '</div>';
@@ -1453,6 +1459,7 @@ window.openCalDayModal = function(date) {
       if (fD(p.actualEnd) === date) items.push({ ...base, action: '완료', status: '완료' });
     });
     if (fD(d.endDate) === date) items.push({ sn, proc: '납기', action: '마감', status: d.status || '대기', equip: '', productName: d.productName || '기타' });
+    if (fD(d.completedAt) === date && d.status === '완료') items.push({ sn, proc: '최종완료', action: '완료', status: '완료', equip: '', productName: d.productName || '기타' });
   });
 
   const dayIssues = S.ISSUES.filter(i => fD(i.date) === date);

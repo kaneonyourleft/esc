@@ -3,17 +3,17 @@
 // 공정별 / 배치별 / 제품별 간트차트
 // =============================================
 
+import * as S from './state.js';
+import { PROC_COLORS } from './constants.js';
+
 let ganttViewMode2 = 'process';
 let ganttCellW = 28;
 let ganttExpandState = {};
 
 const G_ROW = 34;
 const G_HEAD = 28;
-const G_PROCS = ['탈지','소성','환원소성','평탄화','도금','열처리'];
-const G_CLR = {
-  '탈지':'#06b6d4','소성':'#f97316','환원소성':'#a855f7',
-  '평탄화':'#10b981','도금':'#eab308','열처리':'#ef4444'
-};
+const G_PROCS = S.PROC_ORDER;
+const G_CLR = PROC_COLORS;
 
 const G_BATCH_PAL = [
   '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
