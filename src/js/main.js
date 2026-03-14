@@ -1011,7 +1011,7 @@ function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
         <div class="table-responsive"><table class="table ws-table">
           <thead><tr>
             <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(stateKey)}',this.checked)"></th>
-            <th>S/N / 제품명</th><th>상태</th><th>공정 / 설비</th><th>일정</th><th>진행</th>
+            <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
           </tr></thead>
           <tbody>
             ${items.map(([sn, d]) => {
@@ -1027,34 +1027,19 @@ function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
               return `
                 <tr class="ws-row ${status === '지연' ? 'row-delay' : ''}" data-sn="${esc(sn)}">
                   <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
-                  <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;padding:8px 10px">
-                    <div style="font-weight:700;color:var(--ac2);font-size:13px">${esc(sn)}</div>
-                    <div style="font-size:10px;color:var(--t2);margin-top:2px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.productName || '-')}</div>
-                  </td>
+                  <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
                   <td>${statusBadge(status)}</td>
-                  <td class="proc-equip-cell" style="cursor:pointer;font-size:12px;min-width:110px">
-                    <div style="display:flex;align-items:center;gap:4px">
-                      <span onclick="showProcDropdown(event,'${esc(sn)}')" style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:600">${esc(curProc || '-')}</span>
-                      <span onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="color:var(--t2);font-size:11px">
-                        ${esc(equip || '-')} <span style="font-size:9px">▼</span>
-                      </span>
-                    </div>
+                  <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
+                    <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
+                  </td>
+                  <td class="equip-cell" onclick="showEquipDropdown(event,'${esc(sn)}','${esc(curProc)}')" style="cursor:pointer" title="클릭하여 설비 변경">
+                    ${esc(equip || '-')} <span style="font-size:10px;color:var(--t2)">▼</span>
                   </td>
                   <td class="date-cell">
-                    <div style="display:flex;flex-direction:column;gap:1px">
-                       <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" 
-                         style="background:transparent;border:none;color:inherit;font-size:11px;width:105px;padding:0;height:16px;cursor:pointer">
-                       <div style="font-size:10px;color:var(--t2);padding-left:2px">~ ${fmt(endDate)}</div>
-                    </div>
+                    <input type="date" value="${startDate}" onchange="updateProcStartDate('${esc(sn)}','${esc(curProc)}',this.value)" style="background:transparent;border:none;color:inherit;font-size:12px;width:120px">
                   </td>
-                  <td style="width:80px">
-                    <div style="display:flex;align-items:center;gap:4px">
-                       <div style="flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden">
-                         <div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};transition:width 0.3s"></div>
-                       </div>
-                       <span style="font-size:10px;color:var(--t2);width:26px;text-align:right">${progress}%</span>
-                    </div>
-                  </td>
+                  <td style="font-size:12px">${fmt(endDate)}</td>
+                  <td><div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:${progress}%;height:100%;background:${progress >= 100 ? 'var(--suc)' : progress > 0 ? 'var(--ac2)' : 'var(--border)'};border-radius:3px;transition:width 0.3s"></div></div><span style="font-size:11px;color:var(--t2)">${progress}%</span></div></td>
                 </tr>
               `;
             }).join('')}
@@ -2174,6 +2159,13 @@ window.resetWidgetConfig = function() {
 // ===================================================
 window.openSNModal = function() {
   populateProductSelects();
+  
+  // 공정 목록 초기화
+  const procSel = document.getElementById('sn_proc');
+  if (procSel) {
+    procSel.innerHTML = S.PROC_ORDER.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  }
+
   const startEl = document.getElementById('sn_start');
   if (startEl) startEl.value = todayStr();
   
@@ -2219,9 +2211,13 @@ window.onSNProdChange = function() {
   const prod = S.PRODUCTS[prodId];
   if (!prod) return;
   const cat = prod.category || 'WN';
+  
+  const procSel = document.getElementById('sn_proc');
+  const curProc = procSel?.value || S.PROC_ORDER[0];
+
   const equipSel = document.getElementById('sn_equip');
   if (equipSel) {
-    const eqList = getEquipList(PROC_ORDER[0], cat);
+    const eqList = getEquipList(curProc, cat);
     equipSel.innerHTML = '<option value="">선택...</option>' + eqList.map(eq => `<option value="${esc(eq)}">${esc(eq)}</option>`).join('');
   }
   const hint = document.getElementById('sn_seqHint');
@@ -2267,6 +2263,7 @@ window.saveSNBatch = async function() {
   const qty = parseInt(document.getElementById('sn_qty')?.value) || 1;
   const seq = parseInt(document.getElementById('sn_seq')?.value) || 1;
   const startDate = document.getElementById('sn_start')?.value || '';
+  const procName = document.getElementById('sn_proc')?.value || S.PROC_ORDER[0];
   const equip = document.getElementById('sn_equip')?.value || '';
   const prod = S.PRODUCTS[prodId];
   if (!prod || !sheet || !batch) { toast('필수 항목을 입력하세요', 'warn'); return; }
@@ -2289,13 +2286,20 @@ window.saveSNBatch = async function() {
       const processes = {};
       let cursor = startDate;
       route.forEach((proc, idx) => {
+        const isSelectedStart = proc === procName;
+        // 선택한 공정이 루트에 있으면 그 시점부터 '진행'으로 표시하고 싶을 수 있으나 
+        // 기본값은 첫 공정부터 진행. 여기서는 유저가 선택한 공정을 시작점으로 간주.
+        const firstIdx = route.indexOf(procName);
+        const actualIdx = (firstIdx === -1) ? 0 : firstIdx;
+        
+        const isStarted = idx === actualIdx;
         const days = getDefaultDays(proc, cat);
         const end = addBD(cursor, days);
         processes[proc] = {
-          status: idx === 0 ? '진행' : '대기',
+          status: isStarted ? '진행' : (idx < actualIdx ? '완료' : '대기'),
           planStart: cursor, planEnd: end, planDays: days,
-          actualStart: idx === 0 ? cursor : '', actualEnd: '', actualDays: 0,
-          equip: idx === 0 ? equip : '', defect: '', remark: ''
+          actualStart: isStarted ? cursor : '', actualEnd: '', actualDays: 0,
+          equip: isStarted ? equip : '', defect: '', remark: ''
         };
         cursor = end;
       });
@@ -2303,7 +2307,7 @@ window.saveSNBatch = async function() {
       wb.set(ref, {
         sn, productName: prod.name, category: cat, customer: prod.customer || '',
         batch, route, processes, startDate, endDate: cursor,
-        status: '진행', currentProcess: route[0], createdAt: todayStr(), heat
+        status: '진행', currentProcess: procName, createdAt: todayStr(), heat
       });
     }
     await wb.commit();
