@@ -216,7 +216,7 @@ function gBuildProcess(filtered, dates) {
       if (route.indexOf(proc) >= 0) procItems.push({ sn:sn, d:d });
     });
     
-    rows.push({ type:'procHead', proc:proc, color:G_CLR[proc], bars: gGetSummaryBars(procItems, [proc], dates) });
+    rows.push({ type:'procHead', proc:proc, color:G_CLR[proc], bars: gGetSummaryBars(procItems, G_PROCS_EXT, dates) });
 
     var equipMap = {};
     var equipAll = [];
@@ -247,7 +247,7 @@ function gBuildProcess(filtered, dates) {
       if (typeof ganttExpandState[eqKey] === 'undefined') ganttExpandState[eqKey] = false;
 
       rows.push({ type:'equip', key:eqKey, label:eq, count:items.length, proc:proc,
-        expanded:ganttExpandState[eqKey], bars: gGetSummaryBars(items, [proc], dates) });
+        expanded:ganttExpandState[eqKey], bars: gGetSummaryBars(items, G_PROCS_EXT, dates) });
 
       if (ganttExpandState[eqKey]) {
         items.forEach(function(it) {
@@ -453,13 +453,25 @@ window.renderGantt = function renderGantt() {
       var w = Math.max((b.x2 - b.x1 + 1) * ganttCellW - 2, 4);
       var style = gBarStyle(b);
       var label = b.proc || b.bid || '';
-      var h = G_ROW - 12;
-      var top = 6;
+      
+      // 요약바 겹침 방지: 프로세스별로 약간씩 y 오프셋
+      var pIdx = G_PROCS_EXT.indexOf(b.proc);
+      if (pIdx < 0) pIdx = 0;
+      
+      var h, top;
+      if (b.isSummary) {
+        h = 6;
+        top = 4 + (pIdx * 4); // 4, 8, 12, 16, 20, 24...
+        // G_ROW가 34이므로 6개 공정 정도는 겹치지 않게 표시 가능
+      } else {
+        h = G_ROW - 12;
+        top = 6;
+      }
       
       if (ganttCellW >= 18 && label.length > 0) {
         var maxCh = Math.floor(w / 7);
         if (label.length > maxCh) {
-          if (b.isSummary) label = ''; // 요약바는 글자 생략하는게 깔끔
+          if (b.isSummary) label = ''; 
           else label = label.slice(0, maxCh-1) + '\u2026';
         }
       } else { label = ''; }
@@ -467,11 +479,10 @@ window.renderGantt = function renderGantt() {
       var tip = (b.pname||'') + ' | ' + (b.bid||'') + ' | ' + b.proc + ' | ' + b.s + '~' + b.e + ' | ' + b.status;
       if (b.delayed) tip += ' | \uC9C0\uC5F0 ' + b.delayDays + '\uC77C';
 
-      bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:'+top+'px;height:'+h+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:9px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
+      bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:'+top+'px;height:'+h+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:8px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
       bH += label;
       bH += '</div>';
 
-      // 지연 초과 빨간 부분
       if (b.delayed && b.x2over) {
         var dLeft = (b.x2 + 1) * ganttCellW;
         var dW = (b.x2over - b.x2) * ganttCellW;
