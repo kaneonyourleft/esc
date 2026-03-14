@@ -6,7 +6,8 @@ export const PROC_COLORS = {
   '환원소성': '#a855f7',
   '평탄화': '#10b981',
   '도금': '#eab308',
-  '열처리': '#ef4444'
+  '열처리': '#ef4444',
+  '최종완료': '#059669'
 };
 
 export const EQ_MAP = {

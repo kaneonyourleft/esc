@@ -108,6 +108,7 @@ export async function completeProcess(snList, procName, options = {}) {
         if (allProcessesComplete) {
           updates.status = '완료';
           updates.completedAt = today;
+          updates.currentProcess = '최종완료';
         }
       } else {
         updates.currentProcess = route[currentIndex + 1];
