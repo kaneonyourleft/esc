@@ -995,6 +995,26 @@ window.renderWorkspace = function renderWorkspace() {
   updateBatchBar();
 }
 
+function renderWSProcessMap(sn, d) {
+  const route = getRoute(sn, d);
+  return `
+    <div style="display:flex;gap:2px;align-items:center" title="공정상태도">
+      ${S.PROC_ORDER.map(p => {
+        const inRoute = route.includes(p);
+        if (!inRoute) return `<span style="width:4px;height:12px;background:var(--bg3);border-radius:1px;opacity:0.2"></span>`;
+        const pd = getProc(d, p);
+        const st = pd.status || '대기';
+        let clr = 'var(--border)';
+        if (st === '진행') clr = 'var(--ac2)';
+        else if (st === '완료') clr = 'var(--suc)';
+        else if (st === '지연') clr = 'var(--err)';
+        else if (st === '폐기') clr = 'var(--ng)';
+        return `<span style="width:6px;height:14px;background:${clr};border-radius:1px" title="${esc(p)}: ${esc(st)}"></span>`;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
   if (S.wsGroupState[stateKey] === undefined) S.wsGroupState[stateKey] = defaultCollapsed;
   const collapsed = S.wsGroupState[stateKey];
@@ -1011,7 +1031,7 @@ function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
         <div class="table-responsive"><table class="table ws-table">
           <thead><tr>
             <th style="width:30px"><input type="checkbox" onchange="toggleGroupSelect('${esc(stateKey)}',this.checked)"></th>
-            <th>S/N</th><th>상태</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
+            <th>S/N</th><th>상태</th><th>공정상태도</th><th>현재공정</th><th>설비</th><th>시작일</th><th>완료일</th><th>진행률</th>
           </tr></thead>
           <tbody>
             ${items.map(([sn, d]) => {
@@ -1029,6 +1049,7 @@ function renderItemsTable(stateKey, items, label, defaultCollapsed = false) {
                   <td><input type="checkbox" ${checked} onchange="toggleSNSelect('${esc(sn)}',this.checked)"></td>
                   <td class="sn-cell" onclick="openSidePanel('${esc(sn)}')" style="cursor:pointer;font-weight:600;color:var(--ac2)">${esc(sn)}</td>
                   <td>${statusBadge(status)}</td>
+                  <td>${renderWSProcessMap(sn, d)}</td>
                   <td class="proc-cell" onclick="showProcDropdown(event,'${esc(sn)}')" style="cursor:pointer" title="클릭하여 공정 변경">
                     <span style="color:${PROC_COLORS[curProc] || 'var(--t1)'};font-weight:500">${esc(curProc || '-')}</span> <span style="font-size:10px;color:var(--t2)">▼</span>
                   </td>
