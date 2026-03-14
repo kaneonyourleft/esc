@@ -141,6 +141,42 @@ function gMakeBar(sn, d, proc, dates) {
   return bar;
 }
 
+function gGetSummaryBars(items, procList, dates) {
+  var bars = [];
+  procList.forEach(function(proc) {
+    var mn = '9999-12-31', mx = '2000-01-01';
+    var hasData = false, hasProg = false, hasComp = true;
+    items.forEach(function(it) {
+      if (!it.d) return;
+      var p = window.getProc(it.d, proc);
+      var s = window.fD(p.actualStart) || window.fD(p.planStart);
+      var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
+      if (s || e) {
+        hasData = true;
+        if (s && s < mn) mn = s;
+        if (e && e > mx) mx = e;
+        var ps = p.status || '대기';
+        if (ps === '진행') hasProg = true;
+        if (ps !== '완료') hasComp = false;
+      }
+    });
+    if (hasData && mn <= mx) {
+      var x1 = dates.indexOf(mn), x2 = dates.indexOf(mx);
+      if (x1 >= 0 && x2 >= 0) {
+        var sts = hasComp ? '완료' : (hasProg ? '진행' : '대기');
+        var bar = { x1:x1, x2:x2, proc:proc, status:sts, s:mn, e:mx };
+        var today = new Date().toISOString().slice(0,10);
+        if (sts !== '완료' && today > mx) {
+          bar.delayed = true;
+          bar.delayDays = Math.round((new Date(today+'T00:00:00') - new Date(mx+'T00:00:00')) / 86400000);
+        }
+        bars.push(bar);
+      }
+    }
+  });
+  return bars;
+}
+
 function gBarStyle(bar) {
   var clr = G_CLR[bar.proc] || '#666';
   var bclr = gBatchColor(bar.bid);
@@ -157,66 +193,50 @@ function gBuildProcess(filtered, dates) {
   var rows = [];
   var eqMap = window.EQ_MAP || {};
   G_PROCS.forEach(function(proc) {
-    // 공정 헤더
-    rows.push({ type:'procHead', proc:proc, color:G_CLR[proc] });
-
-    // 이 공정에 해당하는 S/N 수집 + 호기별 그룹
-    var equipMap = {};
-    var equipAll = [];
-    // 설비 목록 먼저 수집 (EQ_MAP에서)
-    if (eqMap[proc]) {
-      var eqList = Array.isArray(eqMap[proc]) ? eqMap[proc] : [];
-      eqList.forEach(function(eq) {
-        if (equipAll.indexOf(eq) < 0) equipAll.push(eq);
-        if (!equipMap[eq]) equipMap[eq] = [];
-      });
-    }
-
-    // S/N 순회
+    var procItems = [];
     Object.keys(filtered).forEach(function(sn) {
       var d = filtered[sn];
       var route = window.getRoute(sn, d);
-      if (route.indexOf(proc) < 0) return;
-      var p = window.getProc(d, proc);
+      if (route.indexOf(proc) >= 0) procItems.push({ sn:sn, d:d });
+    });
+    
+    rows.push({ type:'procHead', proc:proc, color:G_CLR[proc], bars: gGetSummaryBars(procItems, [proc], dates) });
+
+    var equipMap = {};
+    var equipAll = [];
+    if (eqMap[proc]) {
+      (Array.isArray(eqMap[proc]) ? eqMap[proc] : []).forEach(function(eq) {
+        equipAll.push(eq);
+        equipMap[eq] = [];
+      });
+    }
+
+    procItems.forEach(function(it) {
+      var p = window.getProc(it.d, proc);
       var eq = p.equip || '미배정';
-      if (!equipMap[eq]) { equipMap[eq] = []; if (equipAll.indexOf(eq)<0) equipAll.push(eq); }
-      equipMap[eq].push({ sn:sn, d:d, proc:proc });
+      if (!equipMap[eq]) {
+        equipMap[eq] = [];
+        if (equipAll.indexOf(eq) < 0) equipAll.push(eq);
+      }
+      equipMap[eq].push(it);
     });
 
-    // 호기 정렬 (숫자순)
     equipAll.sort(function(a,b) {
-      var na = parseInt(a) || 999, nb = parseInt(b) || 999;
-      return na - nb;
+      return (parseInt(a) || 999) - (parseInt(b) || 999);
     });
 
     equipAll.forEach(function(eq) {
       var items = equipMap[eq] || [];
-      var eqKey = proc + '_' + eq;
-      if (typeof ganttExpandState[eqKey] === 'undefined') ganttExpandState[eqKey] = items.length > 0;
+      var eqKey = 'procMode_' + proc + '_' + eq;
+      if (typeof ganttExpandState[eqKey] === 'undefined') ganttExpandState[eqKey] = false;
 
-      // 제품별 집계
-      var prodMap = {};
-      items.forEach(function(it) {
-        var key = (it.d.batchId||'?') + '|' + (it.d.productName||'?');
-        if (!prodMap[key]) prodMap[key] = { bid:it.d.batchId||'', pname:it.d.productName||'', sns:[] };
-        prodMap[key].sns.push(it);
-      });
-      var prods = Object.keys(prodMap).map(function(k){ return prodMap[k]; });
-
-      // 호기 헤더
       rows.push({ type:'equip', key:eqKey, label:eq, count:items.length, proc:proc,
-        expanded:ganttExpandState[eqKey], prods:prods });
+        expanded:ganttExpandState[eqKey], bars: gGetSummaryBars(items, [proc], dates) });
 
-      // 펼쳐져 있으면 제품별 행
       if (ganttExpandState[eqKey]) {
-        prods.forEach(function(pr) {
-          var bars = [];
-          pr.sns.forEach(function(it) {
-            var b = gMakeBar(it.sn, it.d, proc, dates);
-            if (b) bars.push(b);
-          });
-          rows.push({ type:'prodLine', bid:pr.bid, pname:pr.pname, count:pr.sns.length,
-            bars:bars, proc:proc });
+        items.forEach(function(it) {
+          var b = gMakeBar(it.sn, it.d, proc, dates);
+          rows.push({ type:'snLine', sn:it.sn, bars: b ? [b] : [], depth:2 });
         });
       }
     });
@@ -236,56 +256,33 @@ function gBuildBatch(filtered, dates) {
     batchMap[bid][pname].push({ sn:sn, d:d });
   });
 
-  var bids = Object.keys(batchMap).sort();
-  bids.forEach(function(bid) {
+  Object.keys(batchMap).sort().forEach(function(bid) {
     var prods = batchMap[bid];
-    var total = 0;
-    Object.keys(prods).forEach(function(p){ total += prods[p].length; });
     var bKey = 'batch_' + bid;
     if (typeof ganttExpandState[bKey] === 'undefined') ganttExpandState[bKey] = true;
 
-    rows.push({ type:'batchHead', key:bKey, bid:bid, count:total,
-      expanded:ganttExpandState[bKey], color:gBatchColor(bid) });
+    var batchItems = [];
+    Object.keys(prods).forEach(function(p){ batchItems = batchItems.concat(prods[p]); });
+
+    rows.push({ type:'batchHead', key:bKey, bid:bid, count:batchItems.length,
+      expanded:ganttExpandState[bKey], color:gBatchColor(bid), bars: gGetSummaryBars(batchItems, G_PROCS, dates) });
 
     if (ganttExpandState[bKey]) {
       Object.keys(prods).sort().forEach(function(pname) {
         var items = prods[pname];
-        var bars = [];
-        var route = window.getRoute(items[0].sn, items[0].d);
-        route.forEach(function(proc) {
-          // 대표 바: 전체 S/N의 min start ~ max end
-          var mn = '9999-12-31', mx = '2000-01-01';
-          var sts = '대기', hasProg = false, hasComp = true;
+        var pKey = bKey + '_' + pname;
+        if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+
+        rows.push({ type:'batchProd', key:pKey, pname:pname, count:items.length,
+          bars:gGetSummaryBars(items, G_PROCS, dates), bid:bid, expanded:ganttExpandState[pKey] });
+        
+        if (ganttExpandState[pKey]) {
           items.forEach(function(it) {
-            var p = window.getProc(it.d, proc);
-            var s = window.fD(p.actualStart) || window.fD(p.planStart);
-            var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
-            if (s && s < mn) mn = s;
-            if (e && e > mx) mx = e;
-            var ps = p.status || '대기';
-            if (ps === '진행') hasProg = true;
-            if (ps !== '완료') hasComp = false;
+            var route = window.getRoute(it.sn, it.d);
+            var bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+            rows.push({ type:'snLine', sn:it.sn, bars:bars, depth:2 });
           });
-          if (hasComp) sts = '완료';
-          else if (hasProg) sts = '진행';
-          if (mn < '9999' && mx > '2000' && mn <= mx) {
-            var x1 = dates.indexOf(mn), x2 = dates.indexOf(mx);
-            if (x1 < 0) x1 = 0;
-            if (x2 < 0) x2 = dates.length - 1;
-            if (x2 < x1) x2 = x1;
-            var bar = { x1:x1, x2:x2, proc:proc, status:sts, bid:bid, pname:pname,
-              s:mn, e:mx, sn:items.length+'매' };
-            var today = new Date().toISOString().slice(0,10);
-            var ePlan = mx;
-            if (sts !== '완료' && today > ePlan) {
-              bar.delayed = true;
-              bar.delayDays = gDays(ePlan, today);
-            }
-            bars.push(bar);
-          }
-        });
-        rows.push({ type:'batchProd', pname:pname, count:items.length,
-          bars:bars, bid:bid });
+        }
       });
     }
   });
@@ -298,60 +295,23 @@ function gBuildProduct(filtered, dates) {
   Object.keys(filtered).forEach(function(sn) {
     var d = filtered[sn];
     var pname = d.productName || '?';
-    if (!prodMap[pname]) prodMap[pname] = {};
-    var bid = d.batchId || '미배정';
-    if (!prodMap[pname][bid]) prodMap[pname][bid] = [];
-    prodMap[pname][bid].push({ sn:sn, d:d });
+    if (!prodMap[pname]) prodMap[pname] = [];
+    prodMap[pname].push({ sn:sn, d:d });
   });
 
-  var pnames = Object.keys(prodMap).sort();
-  pnames.forEach(function(pname) {
-    var batches = prodMap[pname];
-    var total = 0;
-    Object.keys(batches).forEach(function(b){ total += batches[b].length; });
+  Object.keys(prodMap).sort().forEach(function(pname) {
+    var items = prodMap[pname];
     var pKey = 'prod_' + pname;
     if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = true;
 
-    rows.push({ type:'prodHead', key:pKey, pname:pname, count:total,
-      expanded:ganttExpandState[pKey] });
+    rows.push({ type:'prodHead', key:pKey, pname:pname, count:items.length,
+      expanded:ganttExpandState[pKey], bars: gGetSummaryBars(items, G_PROCS, dates) });
 
     if (ganttExpandState[pKey]) {
-      Object.keys(batches).sort().forEach(function(bid) {
-        var items = batches[bid];
-        var bars = [];
-        var route = window.getRoute(items[0].sn, items[0].d);
-        route.forEach(function(proc) {
-          var mn = '9999-12-31', mx = '2000-01-01';
-          var sts = '대기', hasProg = false, hasComp = true;
-          items.forEach(function(it) {
-            var p = window.getProc(it.d, proc);
-            var s = window.fD(p.actualStart) || window.fD(p.planStart);
-            var e = window.fD(p.actualEnd) || window.fD(p.planEnd);
-            if (s && s < mn) mn = s;
-            if (e && e > mx) mx = e;
-            var ps = p.status || '대기';
-            if (ps === '진행') hasProg = true;
-            if (ps !== '완료') hasComp = false;
-          });
-          if (hasComp) sts = '완료';
-          else if (hasProg) sts = '진행';
-          if (mn < '9999' && mx > '2000' && mn <= mx) {
-            var x1 = dates.indexOf(mn), x2 = dates.indexOf(mx);
-            if (x1 < 0) x1 = 0;
-            if (x2 < 0) x2 = dates.length - 1;
-            if (x2 < x1) x2 = x1;
-            var bar = { x1:x1, x2:x2, proc:proc, status:sts, bid:bid, pname:pname,
-              s:mn, e:mx, sn:items.length+'매' };
-            var today = new Date().toISOString().slice(0,10);
-            if (sts !== '완료' && today > mx) {
-              bar.delayed = true;
-              bar.delayDays = gDays(mx, today);
-            }
-            bars.push(bar);
-          }
-        });
-        rows.push({ type:'prodBatch', bid:bid, count:items.length,
-          bars:bars, pname:pname, color:gBatchColor(bid) });
+      items.forEach(function(it) {
+        var route = window.getRoute(it.sn, it.d);
+        var bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+        rows.push({ type:'snLine', sn:it.sn, bars:bars, depth:1 });
       });
     }
   });
@@ -429,38 +389,35 @@ window.renderGantt = function renderGantt() {
       sbH += esc(r.label);
       sbH += countBadge;
       sbH += '</div>';
-    } else if (r.type === 'prodLine') {
-      sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 40px;font-size:11px;gap:4px;border-bottom:1px solid var(--border);color:var(--t1)">';
-      sbH += '<span style="width:8px;height:8px;border-radius:50%;background:'+gBatchColor(r.bid)+';flex-shrink:0"></span>';
-      sbH += esc(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
+    } else if (r.type === 'snLine') {
+      var pad = (r.depth || 1) * 20;
+      sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 '+pad+'px;font-size:10px;gap:4px;border-bottom:1px solid var(--border);color:var(--t2)">';
+      sbH += esc(r.sn);
       sbH += '</div>';
     } else if (r.type === 'batchHead') {
       var arrow = r.expanded ? '\u25BC' : '\u25B6';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;cursor:pointer;font-weight:600;font-size:12px;gap:6px;border-top:2px solid var(--border);background:var(--bg1)">';
       sbH += '<span style="font-size:9px;color:var(--t3)">'+arrow+'</span>';
       sbH += '<span style="width:10px;height:10px;border-radius:3px;background:'+r.color+';flex-shrink:0"></span>';
-      sbH += esc(r.bid) + ' <span style="color:var(--t3);font-size:10px">('+r.count+')</span>';
+      sbH += esc(r.bid) + ' <span style="color:var(--t2);font-weight:400;font-size:10px;margin-left:auto">'+r.count+'매</span>';
       sbH += '</div>';
     } else if (r.type === 'batchProd') {
-      sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;gap:4px;border-bottom:1px solid var(--border)">';
+      var arrow = r.expanded ? '\u25BC' : '\u25B6';
+      sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;gap:4px;border-bottom:1px solid var(--border);cursor:pointer">';
+      sbH += '<span style="font-size:8px;color:var(--t3);width:10px">'+arrow+'</span>';
       sbH += esc(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
       sbH += '</div>';
     } else if (r.type === 'prodHead') {
       var arrow = r.expanded ? '\u25BC' : '\u25B6';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;cursor:pointer;font-weight:600;font-size:12px;gap:6px;border-top:2px solid var(--border);background:var(--bg1)">';
       sbH += '<span style="font-size:9px;color:var(--t3)">'+arrow+'</span>';
-      sbH += esc(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
-      sbH += '</div>';
-    } else if (r.type === 'prodBatch') {
-      sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;gap:6px;border-bottom:1px solid var(--border)">';
-      sbH += '<span style="width:8px;height:8px;border-radius:2px;background:'+r.color+';flex-shrink:0"></span>';
-      sbH += esc(r.bid) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'\uB9E4)</span>';
+      sbH += esc(r.pname) + ' <span style="color:var(--t2);font-weight:400;font-size:10px;margin-left:auto">'+r.count+'매</span>';
       sbH += '</div>';
     }
 
     var rowBg = '';
     if (r.type === 'procHead') rowBg = 'background:var(--bg1);border-top:2px solid var(--border);';
-    else if (r.type === 'equip') rowBg = 'background:var(--bg2);';
+    else if (r.type === 'equip' || r.type === 'batchProd') rowBg = 'background:var(--bg2);';
     else if (r.type === 'batchHead' || r.type === 'prodHead') rowBg = 'background:var(--bg1);border-top:2px solid var(--border);';
 
     bH += '<div style="position:relative;height:'+G_ROW+'px;width:'+totalW+'px;'+rowBg+'border-bottom:1px solid var(--border)">';
