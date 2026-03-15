@@ -10,47 +10,9 @@ import { buildContext, parseCommand } from './ai-context.js';
 
 console.log('🤖 ai.js loaded successfully!');
 
-// ===================================================
-// 타이핑 인디케이터
-// ===================================================
-function addTypingIndicator(container) {
-  const div = document.createElement('div');
-  div.className = 'chat-bubble ai';
-  div.id = 'ai-typing';
-  div.innerHTML = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
-  container.appendChild(div);
-  window.safeScrollToBottom(container); // Use global safeScrollToBottom
-  return div;
-}
-window.addTypingIndicator = addTypingIndicator; // Make it global
-
-// ===================================================
-// 로딩 인디케이터 (stub 함수)
-// ===================================================
-function addLoadingIndicator() {
-  console.log('[AI] Loading indicator called (stub)');
-  // 실제 구현이 필요한 경우 여기에 추가
-  const container = document.getElementById('chatMessages') || document.getElementById('miniChatMessages');
-  if (!container) return;
-  const div = document.createElement('div');
-  div.className = 'chat-bubble ai';
-  div.id = 'ai-loading-indicator';
-  div.innerHTML = 'AI가 응답을 준비 중입니다...';
-  container.appendChild(div);
-  window.safeScrollToBottom(container);
-  return div;
-}
-window.addLoadingIndicator = addLoadingIndicator;
-
-function removeLoadingIndicator() {
-  const el = document.getElementById('ai-loading-indicator');
-  if (el) el.remove();
-}
-window.removeLoadingIndicator = removeLoadingIndicator; // Make globally accessible
-
-// ===================================================
-// 안전한 스크롤 이동 유틸리티 (IndexSizeError 방지)
-// ===================================================
+/**
+ * 안전한 스크롤 이동 유틸리티 (IndexSizeError 방지)
+ */
 function safeScrollToBottom(container) {
   if (!container) return;
   requestAnimationFrame(() => {
@@ -61,7 +23,6 @@ function safeScrollToBottom(container) {
     }
   });
 }
-window.safeScrollToBottom = safeScrollToBottom; // Make globally accessible
 
 // ===================================================
 // Gemini API 호출
@@ -91,7 +52,7 @@ ${systemCtx}
 ${question}`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -114,20 +75,15 @@ function generateLocalAI(msg) {
 
   if (q.includes('요약') || q.includes('현황')) {
     const ctx = buildContext();
-    return `**📊 생산 현황 요약**
-
-${ctx}`;
+    return `**📊 생산 현황 요약**\n\n${ctx}`;
   }
 
   if (q.includes('지연')) {
     const delayed = Object.entries(S.DATA).filter(([, d]) => (d.status || '대기') === '지연');
     if (!delayed.length) return '현재 지연된 LOT이 없습니다. ✅';
-    let r = `**⚠️ 지연 현황 (${delayed.length}건)**
-
-`;
+    let r = `**⚠️ 지연 현황 (${delayed.length}건)**\n\n`;
     delayed.forEach(([sn, d]) => {
-      r += `- **${sn}** — ${d.currentProcess || '-'} / 납기: ${fD(d.endDate)}
-`;
+      r += `- **${sn}** — ${d.currentProcess || '-'} / 납기: ${fD(d.endDate)}\n`;
     });
     return r;
   }
@@ -146,48 +102,42 @@ ${ctx}`;
       }
     });
     if (!Object.keys(equipUsage).length) return '현재 가동 중인 설비가 없습니다.';
-    let r = `**🔧 설비 가동 현황**
-
-`;
+    let r = `**🔧 설비 가동 현황**\n\n`;
     Object.entries(equipUsage).sort((a, b) => b[1].length - a[1].length).forEach(([eq, sns]) => {
-      r += `- **${eq}**: ${sns.length}건 가동중 (${sns.slice(0, 3).join(', ')}${sns.length > 3 ? '...' : ''})
-`;
+      r += `- **${eq}**: ${sns.length}건 가동중 (${sns.slice(0, 3).join(', ')}${sns.length > 3 ? '...' : ''})\n`;
     });
     return r;
   }
 
   if (q.includes('공정') || q.includes('파이프')) {
-    let r = `**⚙️ 공정별 현황**
-
-`;
+    let r = `**⚙️ 공정별 현황**\n\n`;
     PROC_ORDER.forEach(proc => {
       const items = Object.entries(S.DATA).filter(([sn, d]) => {
         return d.currentProcess === proc && (d.status === '진행' || d.status === '대기');
       });
-      r += `- **${proc}**: ${items.length}건
-`;
+      r += `- **${proc}**: ${items.length}건\n`;
     });
     return r;
   }
 
   if (q.includes('개선') || q.includes('제안')) {
-    return `**💡 생산 효율 개선 제안**
-
-1. 지연 LOT 우선 처리 — 병목 공정의 설비 추가 투입 검토
-2. 공정간 대기시간 최소화 — 이전 공정 완료 즉시 다음 공정 시작
-3. 설비 가동률 모니터링 — 유휴 설비 재배치
-4. 불량률 높은 공정 집중 관리 — 원인 분석 및 예방 조치
-5. 납기 역산 기준 투입 계획 수립`;
+    return `**💡 생산 효율 개선 제안**\n\n1. 지연 LOT 우선 처리 — 병목 공정의 설비 추가 투입 검토\n2. 공정간 대기시간 최소화 — 이전 공정 완료 즉시 다음 공정 시작\n3. 설비 가동률 모니터링 — 유휴 설비 재배치\n4. 불량률 높은 공정 집중 관리 — 원인 분석 및 예방 조치\n5. 납기 역산 기준 투입 계획 수립`;
   }
 
-  return `"${msg}"에 대한 분석입니다.
+  return `"${msg}"에 대한 분석입니다.\n\n**사용 가능한 명령:**\n- 현황 요약\n- 지연 현황\n- 설비 가동 현황\n- 공정별 현황\n- 개선 제안`;
+}
 
-**사용 가능한 명령:**
-- 현황 요약
-- 지연 현황
-- 설비 가동 현황
-- 공정별 현황
-- 개선 제안`;
+// ===================================================
+// 타이핑 인디케이터
+// ===================================================
+function addTypingIndicator(container) {
+  const div = document.createElement('div');
+  div.className = 'chat-bubble ai';
+  div.id = 'ai-typing';
+  div.innerHTML = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
+  container.appendChild(div);
+  safeScrollToBottom(container);
+  return div;
 }
 
 // ===================================================
@@ -233,9 +183,7 @@ async function executeAiCommand(parsed) {
           startDate: date,
           seq: maxSeq + 1
         });
-        return `✅ **${product}** 제품 **${qty}**개 투입을 완료했습니다.
-- 배치: ${batchCode}
-- 시작일: ${date}`;
+        return `✅ **${product}** 제품 **${qty}**개 투입을 완료했습니다.\n- 배치: ${batchCode}\n- 시작일: ${date}`;
       } else {
         throw new Error('시스템 함수(saveSNBatch)를 찾을 수 없습니다.');
       }
@@ -319,7 +267,7 @@ window.sendChat = async function() {
   
   // 1. 분석/현황 질문
   if (parsed && parsed.action === 'analysis') {
-    const typingEl = window.addTypingIndicator(container);
+    const typingEl = addTypingIndicator(container);
     if (hasKey) {
       try {
         const response = await callGemini(apiKey, msg);
@@ -356,7 +304,7 @@ window.sendChat = async function() {
   // 2. 실행형 명령
   if (parsed && parsed.action !== 'analysis' && parsed.data) {
     showCommandConfirm(container, parsed, async (p) => {
-      const typingEl = window.addTypingIndicator(container);
+      const typingEl = addTypingIndicator(container);
       const result = await executeAiCommand(p);
       typingEl.remove();
       const div = document.createElement('div');
@@ -369,7 +317,7 @@ window.sendChat = async function() {
   }
 
   // 3. 일반 질문
-  const typingEl = window.addTypingIndicator(container);
+  const typingEl = addTypingIndicator(container);
   if (hasKey) {
     try {
       const response = await callGemini(apiKey, msg);
@@ -422,7 +370,7 @@ window.sendMiniChat = async function() {
   container.appendChild(userDiv);
   safeScrollToBottom(container);
 
-  const typingEl = window.addTypingIndicator(container);
+  const typingEl = addTypingIndicator(container);
   const apiKey = localStorage.getItem('esc_gemini_key');
   const hasKey = apiKey && apiKey.length > 10;
   let response;

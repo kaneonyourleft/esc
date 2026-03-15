@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "sync": "node -e \"const fs=require('fs'),path=require('path');const src='dist/assets',dst='public/assets';fs.rmSync(dst,{recursive:true,force:true});fs.mkdirSync(dst,{recursive:true});fs.readdirSync(src).forEach(f=>fs.copyFileSync(path.join(src,f),path.join(dst,f)));fs.copyFileSync('dist/index.html','public/index.html');console.log('✅ public/ synced from dist/')\"",
-    "deploy": "vite build && npm run sync && firebase deploy --only hosting"
+    "deploy": "vite build && firebase deploy --only hosting"
   },
   "keywords": [],
   "author": "Kane",

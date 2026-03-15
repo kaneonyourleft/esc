@@ -317,7 +317,6 @@
             </div>
             <div class="chat-input-wrap">
               <input class="form-input" id="chatInput" placeholder="질문을 입력하세요..." onkeydown="if(event.key==='Enter')sendChat()">
-              <button class="btn btn-secondary" id="voiceMicBtn" onclick="window.toggleVoiceInput('chatInput','voiceMicBtn')" title="음성 입력" style="padding:0 12px;font-size:18px">🎤</button>
               <button class="btn btn-primary" onclick="sendChat()">전송</button>
             </div>
           </div>
@@ -404,7 +403,6 @@
     </div>
     <div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">
       <input class="form-input" id="miniChatInput" placeholder="질문..." style="font-size:12px" onkeydown="if(event.key==='Enter')sendMiniChat()">
-      <button class="btn btn-secondary btn-sm" id="miniVoiceMicBtn" onclick="window.toggleVoiceInput('miniChatInput','miniVoiceMicBtn')" title="음성 입력" style="padding:0 8px;font-size:15px">🎤</button>
       <button class="btn btn-primary btn-sm" onclick="sendMiniChat()">전송</button>
     </div>
   </div>

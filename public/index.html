@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-76wYF87H.js"></script>
+  <script type="module" crossorigin src="/assets/index-N19Ysgr_.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-C3eOhDyd.css">
 </head>
 <body>
@@ -329,6 +329,19 @@
           <div style="display:none">
             <span id="settingName"></span>
             <span id="settingEmail"></span>
+          </div>
+          <!-- static always-visible section -->
+          <div class="setting-section">
+            <div class="setting-title">🤖 Gemini AI 설정</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input class="form-input" id="geminiKeyInput" type="password" placeholder="Gemini API Key 입력...">
+              <button class="btn btn-primary btn-sm" onclick="saveGeminiKey()">저장</button>
+            </div>
+            <div id="geminiKeyStatus" style="font-size:12px;color:var(--t2)"></div>
+          </div>
+          <div class="setting-section">
+            <div class="setting-title">📊 데이터 현황</div>
+            <div id="dataStatsSettings" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:0"></div>
           </div>
           <!-- dynamic content injected by settings.js renderSettings() -->
           <div id="settingsContent"></div>
