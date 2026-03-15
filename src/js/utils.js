@@ -1,4 +1,4 @@
-import { EQ_MAP } from './constants.js';
+﻿import { EQ_MAP } from './constants.js';
 
 export const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -151,8 +151,8 @@ export function formatMonth(monthKey) {
 
 export function getRoute(sn, item) {
   if (item && Array.isArray(item.route) && item.route.length > 0) return item.route;
-  if (item && typeof item.route === 'string' && item.route.includes('→')) {
-    const parts = item.route.split('→').map(s => s.trim()).filter(Boolean);
+  if (item && typeof item.route === 'string' && (item.route.includes('→') || item.route.includes('>'))) {
+    const parts = item.route.split(/[→>]/).map(s => s.trim()).filter(Boolean);
     if (parts.length) return parts;
   }
   const cat = extractCategory(sn) || (item && item.category ? item.category : '');
