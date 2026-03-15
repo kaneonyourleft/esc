@@ -1,4 +1,4 @@
-import * as S from './state.js';
+﻿import * as S from './state.js';
 import { PROC_COLORS, EQ_MAP, DEFAULT_WIDGETS } from './constants.js';
 import { handleFirestoreError, toast, openModal, closeModal, statusBadge, esc } from './app-utils.js';
 import { fD, fmt, getProc, addBD, diffBD, getDefaultDays, buildRoute, getRoute, getEquipList, calcProgress, extractCategory, extractBatchFromSN, positionDropdown, handleEmptyChart, mdToHtml, getInputMonth, formatMonth } from './utils.js';
@@ -113,7 +113,7 @@ function onDataChanged() {
     case 'home': renderHome(); break;
     case 'workspace': scheduleRender(); break;
     case 'calendar': renderCalendar(); break;
-    case 'gantt': renderGantt(); break;
+    case 'gantt': window.renderGantt(); break;
     case 'analysis': renderAnalysis(); break;
     case 'settings': renderSettings(); break;
   }
@@ -327,7 +327,7 @@ function renderCurrentTab() {
     case 'home': renderHome(); break;
     case 'workspace': renderWorkspace(); break;
     case 'calendar': renderCalendar(); break;
-    case 'gantt': renderGantt(); break;
+    case 'gantt': window.renderGantt(); break;
     case 'analysis': renderAnalysis(); break;
     case 'settings': renderSettings(); break;
   }
@@ -1677,6 +1677,56 @@ window.openCalDayModal = function(date) {
   });
 };
 
+
+// ===================================================
+// 간트 필터 + window 전역 노출
+// ===================================================
+function normalizeStatus(status) {
+  return String(status || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+function isExcludedStatus(status) {
+  const s = normalizeStatus(status);
+  return ['완료','complete','completed','폐기','discard','폐기완료'].includes(s);
+}
+window.getFiltered = function getFiltered() {
+  const fProd = document.getElementById('ganttProdFilter')?.value || '';
+  const fStatus = document.getElementById('ganttStatusFilter')?.value || '';
+  const result = {};
+  Object.entries(S.DATA).forEach(([sn, d]) => {
+    if (isExcludedStatus(d.status)) return;
+    if (fProd && (d.productName || '') !== fProd) return;
+    if (fStatus && (d.status || '대기') !== fStatus) return;
+    result[sn] = d;
+  });
+  console.log('[간트 필터] getFiltered:', Object.keys(result).length, '건 / 전체:', Object.keys(S.DATA).length, '건');
+  return result;
+};
+window.getRoute = getRoute;
+window.getProc = getProc;
+window.fD = fD;
+window.esc = esc;
+window.EQ_MAP = EQ_MAP;
+
+// ── 간트 필터 + window 전역 노출 (gantt.js 참조용) ──────────────
+window.getFiltered = function(){
+  var fProd = (document.getElementById('ganttProdFilter')||{}).value||'';
+  var fStat = (document.getElementById('ganttStatusFilter')||{}).value||'';
+  var result={};
+  Object.entries(S.DATA).forEach(function(kv){
+    var sn=kv[0], d=kv[1];
+    if (isExcludedStatus(d.status)) return;
+    if (fProd && (d.productName||'')!==fProd) return;
+    if (fStat && (d.status||'대기')!==fStat) return;
+    result[sn]=d;
+  });
+  console.log('[간트 필터]',Object.keys(result).length,'건 / 전체',Object.keys(S.DATA).length,'건');
+  return result;
+};
+window.getRoute  = getRoute;
+window.getProc   = getProc;
+window.fD        = fD;
+window.esc       = esc;
+window.EQ_MAP    = EQ_MAP;
 function renderGantt() {
   if (typeof window.renderGantt === 'function') window.renderGantt();
 }
@@ -2653,3 +2703,34 @@ window.changeEquipment = changeEquipment;
 window.changeCurrentProcess = changeCurrentProcess;
 window.setStatus = setStatus;
 window.setStatusBatch = setStatusBatch;
+
+// ─────────────────────────────────────────────────────────────────
+// [PATCH v2.2] window 전역 노출 + getFiltered (gantt.js 참조용)
+// normalizeStatus 대신 _gNormSt 로 이름 충돌 회피
+// ─────────────────────────────────────────────────────────────────
+window.getRoute = getRoute;
+window.getProc  = getProc;
+window.fD       = fD;
+window.esc      = esc;
+window.EQ_MAP   = EQ_MAP;
+
+window.getFiltered = function getFiltered() {
+  function _gNormSt(v){ return String(v||'').trim().toLowerCase().replace(/\s+/g,''); }
+  function _gExcl(v){
+    var n=_gNormSt(v);
+    return n==='완료'||n==='complete'||n==='completed'||n==='폐기'||n==='discard'||n==='폐기완료';
+  }
+  var fProd   = (document.getElementById('ganttProdFilter')   ||{}).value||'';
+  var fStatus = (document.getElementById('ganttStatusFilter') ||{}).value||'';
+  var result  = {};
+  Object.keys(S.DATA).forEach(function(sn){
+    var d = S.DATA[sn];
+    if (_gExcl(d.status)) return;
+    if (fProd   && (d.productName||'') !== fProd)   return;
+    if (fStatus && (d.status||'대기')  !== fStatus) return;
+    result[sn] = d;
+  });
+  console.log('[gantt] getFiltered:', Object.keys(result).length, '/ total:', Object.keys(S.DATA).length);
+  return result;
+};
+// ─────────────────────────────────────────────────────────────────
