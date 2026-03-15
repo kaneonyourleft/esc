@@ -1150,7 +1150,7 @@ window.showEquipDropdown = function(e, sn, proc) {
   }, 0);
 };
 
-async function updateEquip(sn, proc, equip) {
+export async function updateEquip(sn, proc, equip) {
   try {
     await changeEquipment(sn, proc, equip);
     toast(`${sn} ${proc} 설비 → ${equip || '해제'}`, 'success');
@@ -2364,7 +2364,7 @@ window.updateSNPreview = function() {
   preview.innerHTML = items.map(s => `<div>${esc(s)}</div>`).join('');
 };
 
-window.saveSNBatch = async function() {
+export async function saveSNBatch() {
   const batch = document.getElementById('sn_batch')?.value.trim() || '';
   const sheet = document.getElementById('sn_sheet')?.value.trim() || '';
   const prodId = document.getElementById('sn_prod')?.value || '';
@@ -2422,7 +2422,8 @@ window.saveSNBatch = async function() {
     toast(`${qty}건 S/N 생성 완료`, 'success');
     closeModal('snModal');
   } catch (err) { handleFirestoreError(err, 'S/N 생성'); }
-};
+}
+window.saveSNBatch = saveSNBatch;
 
 // ===================================================
 // 이슈 등록 모달
