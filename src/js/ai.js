@@ -8,7 +8,21 @@ import { fD, mdToHtml } from './utils.js';
 import { handleFirestoreError, toast } from './app-utils.js';
 import { buildContext, parseCommand } from './ai-context.js';
 
-console.log('🤖 ai.js loaded');
+console.log('🤖 ai.js loaded successfully!');
+
+/**
+ * 안전한 스크롤 이동 유틸리티 (IndexSizeError 방지)
+ */
+function safeScrollToBottom(container) {
+  if (!container) return;
+  requestAnimationFrame(() => {
+    try {
+      container.scrollTop = container.scrollHeight;
+    } catch (e) {
+      console.warn('Scroll error ignored:', e);
+    }
+  });
+}
 
 // ===================================================
 // Gemini API 호출
@@ -122,7 +136,7 @@ function addTypingIndicator(container) {
   div.id = 'ai-typing';
   div.innerHTML = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  safeScrollToBottom(container);
   return div;
 }
 
@@ -131,6 +145,8 @@ function addTypingIndicator(container) {
 // ===================================================
 async function executeAiCommand(parsed) {
   try {
+    const commonOpts = { user: S.currentUser?.email || 'AI Assistant', source: 'AI Assistant' };
+
     if (parsed.action === 'create_sn') {
       const { product, qty, date } = parsed.data;
       const prodId = Object.keys(S.PRODUCTS).find(id => 
@@ -149,6 +165,7 @@ async function executeAiCommand(parsed) {
       });
       const batchCode = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
 
+      // UI 자동 입력 (사용자 확인용)
       const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
       setVal('sn_batch', batchCode);
       setVal('sn_sheet', sheet);
@@ -157,7 +174,15 @@ async function executeAiCommand(parsed) {
       setVal('sn_start', date);
       
       if (typeof window.saveSNBatch === 'function') {
-        await window.saveSNBatch();
+        await window.saveSNBatch({
+          ...commonOpts,
+          batchId: batchCode,
+          sheetNo: sheet,
+          product: prodId,
+          quantity: qty,
+          startDate: date,
+          seq: maxSeq + 1
+        });
         return `✅ **${product}** 제품 **${qty}**개 투입을 완료했습니다.\n- 배치: ${batchCode}\n- 시작일: ${date}`;
       } else {
         throw new Error('시스템 함수(saveSNBatch)를 찾을 수 없습니다.');
@@ -167,9 +192,9 @@ async function executeAiCommand(parsed) {
     if (parsed.action === 'proc_change') {
       const { sn, proc, status } = parsed.data;
       if (typeof window.updateEquip === 'function') {
-        await window.updateEquip(sn, proc, 'AI 자동처리');
+        await window.updateEquip(sn, proc, 'AI 자동처리', commonOpts);
       } else {
-        console.warn('window.updateEquip not found, falling back to local simulation');
+        console.warn('window.updateEquip not found');
       }
       return `✅ **${sn}** LOT의 **${proc}** 공정을 **${status}** 처리했습니다. (설비: AI 자동처리)`;
     }
@@ -201,7 +226,7 @@ function showCommandConfirm(container, parsed, onConfirm) {
     </div>
   `;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  safeScrollToBottom(container);
 
   div.querySelector('#cmd-confirm').onclick = () => {
     div.remove();
@@ -234,7 +259,7 @@ window.sendChat = async function() {
   userDiv.className = 'chat-bubble user';
   userDiv.textContent = msg;
   container.appendChild(userDiv);
-  container.scrollTop = container.scrollHeight;
+  safeScrollToBottom(container);
 
   const parsed = parseCommand(msg);
   const apiKey = localStorage.getItem('esc_gemini_key');
@@ -251,7 +276,7 @@ window.sendChat = async function() {
         div.className = 'chat-bubble ai';
         div.innerHTML = mdToHtml(response);
         container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        safeScrollToBottom(container);
         return;
       } catch (e) {
         console.warn('Gemini error:', e);
@@ -261,7 +286,7 @@ window.sendChat = async function() {
         div.innerHTML = mdToHtml(generateLocalAI(msg)) + 
           `<div style="font-size:11px;color:var(--err);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">⚠️ Gemini API 호출 실패: ${e.message}</div>`;
         container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        safeScrollToBottom(container);
         return;
       }
     }
@@ -272,7 +297,7 @@ window.sendChat = async function() {
     div.innerHTML = mdToHtml(generateLocalAI(msg)) + 
       `<div style="font-size:11px;color:var(--t3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">💡 현재 로컬 분석 모드입니다. 더 정확한 AI 분석을 원하시면 **설정 → Gemini API Key**를 등록해 주세요.</div>`;
     container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    safeScrollToBottom(container);
     return;
   }
 
@@ -286,7 +311,7 @@ window.sendChat = async function() {
       div.className = 'chat-bubble ai';
       div.innerHTML = mdToHtml(result);
       container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
+      safeScrollToBottom(container);
     });
     return;
   }
@@ -301,7 +326,7 @@ window.sendChat = async function() {
       div.className = 'chat-bubble ai';
       div.innerHTML = mdToHtml(response);
       container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
+      safeScrollToBottom(container);
       return;
     } catch (e) {
       typingEl.remove();
@@ -310,7 +335,7 @@ window.sendChat = async function() {
       div.innerHTML = mdToHtml(generateLocalAI(msg)) + 
         `<div style="font-size:11px;color:var(--err);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">⚠️ Gemini 연결 실패: ${e.message}</div>`;
       container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
+      safeScrollToBottom(container);
       return;
     }
   }
@@ -323,7 +348,7 @@ window.sendChat = async function() {
   div.innerHTML = mdToHtml(generateLocalAI(msg)) +
     `<div style="font-size:11px;color:var(--t3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">💡 Gemini API 키를 등록하면 더 정확한 AI 분석을 받을 수 있습니다.</div>`;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  safeScrollToBottom(container);
 };
 
 // ===================================================
@@ -343,7 +368,7 @@ window.sendMiniChat = async function() {
   userDiv.style.fontSize = '12px';
   userDiv.textContent = msg;
   container.appendChild(userDiv);
-  container.scrollTop = container.scrollHeight;
+  safeScrollToBottom(container);
 
   const typingEl = addTypingIndicator(container);
   const apiKey = localStorage.getItem('esc_gemini_key');
@@ -371,5 +396,5 @@ window.sendMiniChat = async function() {
     (errorMsg ? `<div style="font-size:10px;color:var(--err);margin-top:4px">⚠️ API 오류: ${errorMsg}</div>` : 
     (!hasKey ? `<div style="font-size:10px;color:var(--t3);margin-top:4px">💡 API 키 미등록</div>` : ''));
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  safeScrollToBottom(container);
 };

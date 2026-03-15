@@ -1177,6 +1177,8 @@ window.updateProcStartDate = async function(sn, proc, val) {
       updates[`processes.${proc}.actualStart`] = val;
     }
     updates.updatedAt = FB.serverTimestamp();
+    updates.updatedBy = S.currentUser?.email || 'unknown';
+    updates.lastAction = 'updateProcStartDate';
     await FB.updateDoc(ref, updates);
     toast(`${sn} ${proc} 시작일 → ${fmt(val)} (종료: ${fmt(endDate)})`, 'success');
   } catch (err) { handleFirestoreError(err, '날짜 변경'); }
@@ -2367,15 +2369,17 @@ window.updateSNPreview = function() {
   preview.innerHTML = items.map(s => `<div>${esc(s)}</div>`).join('');
 };
 
-export async function saveSNBatch() {
-  const batch = document.getElementById('sn_batch')?.value.trim() || '';
-  const sheet = document.getElementById('sn_sheet')?.value.trim() || '';
-  const prodId = document.getElementById('sn_prod')?.value || '';
-  const qty = parseInt(document.getElementById('sn_qty')?.value) || 1;
-  const seq = parseInt(document.getElementById('sn_seq')?.value) || 1;
-  const startDate = document.getElementById('sn_start')?.value || '';
-  const procName = document.getElementById('sn_proc')?.value || S.PROC_ORDER[0];
-  const equip = document.getElementById('sn_equip')?.value || '';
+export async function saveSNBatch(options = {}) {
+  const isAI = options && options.source === 'AI Assistant';
+  const batch = isAI ? options.batchId : (document.getElementById('sn_batch')?.value.trim() || '');
+  const sheet = isAI ? options.sheetNo : (document.getElementById('sn_sheet')?.value.trim() || '');
+  const prodId = isAI ? options.product : (document.getElementById('sn_prod')?.value || '');
+  const qty = isAI ? options.quantity : (parseInt(document.getElementById('sn_qty')?.value) || 1);
+  const seq = isAI ? options.seq : (parseInt(document.getElementById('sn_seq')?.value) || 1);
+  const startDate = isAI ? options.startDate : (document.getElementById('sn_start')?.value || '');
+  const procName = isAI ? options.procName : (document.getElementById('sn_proc')?.value || S.PROC_ORDER[0]);
+  const equip = isAI ? options.equipment : (document.getElementById('sn_equip')?.value || '');
+  
   const prod = S.PRODUCTS[prodId];
   if (!prod || !sheet || !batch) { toast('필수 항목을 입력하세요', 'warn'); return; }
   if (!startDate) { toast('시작일을 입력하세요', 'warn'); return; }
@@ -2391,15 +2395,19 @@ export async function saveSNBatch() {
   
   try {
     const wb = FB.writeBatch(firebaseDb);
+    const audit = {
+      updatedAt: FB.serverTimestamp(),
+      updatedBy: options.user || S.currentUser?.email || 'unknown',
+      lastAction: 'saveSNBatch',
+      actionSource: options.source || 'Manual'
+    };
+
     for (let i = 0; i < qty; i++) {
       const num = String(seq + i).padStart(3, '0');
       const sn = `${cat}${sheet}-${snName}-L${num}`;
       const processes = {};
       let cursor = startDate;
       route.forEach((proc, idx) => {
-        const isSelectedStart = proc === procName;
-        // 선택한 공정이 루트에 있으면 그 시점부터 '진행'으로 표시하고 싶을 수 있으나 
-        // 기본값은 첫 공정부터 진행. 여기서는 유저가 선택한 공정을 시작점으로 간주.
         const firstIdx = route.indexOf(procName);
         const actualIdx = (firstIdx === -1) ? 0 : firstIdx;
         
@@ -2418,12 +2426,13 @@ export async function saveSNBatch() {
       wb.set(ref, {
         sn, productName: prod.name, category: cat, customer: prod.customer || '',
         batch, route, processes, startDate, endDate: cursor,
-        status: '진행', currentProcess: procName, createdAt: todayStr(), heat
+        status: '진행', currentProcess: procName, createdAt: todayStr(), heat,
+        ...audit
       });
     }
     await wb.commit();
     toast(`${qty}건 S/N 생성 완료`, 'success');
-    closeModal('snModal');
+    if (!isAI) closeModal('snModal');
   } catch (err) { handleFirestoreError(err, 'S/N 생성'); }
 }
 window.saveSNBatch = saveSNBatch;
