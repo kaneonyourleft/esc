@@ -481,7 +481,7 @@ function gBuildBatch(filtered, dates) {
         type: 'batchProd', key: pKey, pname,
         count: pQty, bid,
         expanded: ganttExpandState[pKey],
-        isSummary: false, bars: bpChildBars, isPreview: true
+        isSummary: false, bars: bpChildBars, isPreview: false
       });
 
       if (!ganttExpandState[pKey]) return;
