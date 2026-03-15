@@ -75,7 +75,7 @@ function gDateRange(filtered) {
     route.forEach(function(proc) {
       const p = window.getProc ? window.getProc(d, proc) : {};
       const fD = window.fD || function(v){ return ''; };
-      const sStr = fD(p.actualStart) || fD(p.planStart);
+      const sStr = fD(p.actualStart) || fD(p.planStart) || fD(p.startDate);
       const eStr = fD(p.actualEnd) || fD(p.planEnd);
       const sd = parseLocalDate(sStr);
       const ed = parseLocalDate(eStr);
@@ -168,7 +168,8 @@ function sortEquipAll(list) {
 function gMakeBar(sn, d, proc, dates) {
   const p = (window.getProc ? window.getProc(d, proc) : null) || {};
   const fD = window.fD || function(v){ return ''; };
-  let s = fD(p.actualStart) || fD(p.planStart);
+  // 실제 데이터 필드: startDate(시작), actualEnd(실제종료), planEnd(예정종료)
+  let s = fD(p.actualStart) || fD(p.planStart) || fD(p.startDate);
   const eAct = fD(p.actualEnd);
   const ePlan = fD(p.planEnd);
   let e = eAct || ePlan;
@@ -204,7 +205,7 @@ function gGetSummaryBars(items, procList, dates) {
     items.forEach(function(it) {
       if (!it.d) return;
       const p = window.getProc(it.d, proc);
-      let s = window.fD(p.actualStart) || window.fD(p.planStart);
+      let s = window.fD(p.actualStart) || window.fD(p.planStart) || window.fD(p.startDate);
       let e = window.fD(p.actualEnd) || window.fD(p.planEnd);
       if (proc === '최종완료') { s = e = window.fD(it.d.completedAt); }
       if (s || e) {
