@@ -7,7 +7,8 @@ import { PROC_ORDER } from './constants.js';
 import { fD, mdToHtml } from './utils.js';
 import { handleFirestoreError, toast } from './app-utils.js';
 import { buildContext, parseCommand } from './ai-context.js';
-import { updateEquip } from './main.js';
+
+console.log('🤖 ai.js loaded');
 
 // ===================================================
 // Gemini API 호출
@@ -165,7 +166,11 @@ async function executeAiCommand(parsed) {
 
     if (parsed.action === 'proc_change') {
       const { sn, proc, status } = parsed.data;
-      await updateEquip(sn, proc, 'AI 자동처리');
+      if (typeof window.updateEquip === 'function') {
+        await window.updateEquip(sn, proc, 'AI 자동처리');
+      } else {
+        console.warn('window.updateEquip not found, falling back to local simulation');
+      }
       return `✅ **${sn}** LOT의 **${proc}** 공정을 **${status}** 처리했습니다. (설비: AI 자동처리)`;
     }
   } catch (err) {

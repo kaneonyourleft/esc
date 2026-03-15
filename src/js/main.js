@@ -322,6 +322,8 @@ window.switchTab = function(tab) {
   }
 };
 
+window.updateEquip = updateEquip;
+
 function renderCurrentTab() {
   switch (S.currentTab) {
     case 'home': renderHome(); break;
@@ -330,6 +332,7 @@ function renderCurrentTab() {
     case 'gantt': window.renderGantt(); break;
     case 'analysis': renderAnalysis(); break;
     case 'settings': renderSettings(); break;
+    case 'ai': /* Static HTML in index.html, no render function needed */ break;
   }
 }
 
