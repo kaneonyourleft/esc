@@ -44,7 +44,7 @@ function gIsSummaryRow(r) {
   if (!r) return false;
   if (r.isSummary === true) return true;
   const t = String(r.type || '').trim().toLowerCase();
-  return ['prochead','equip','procprod','batchhead','batchprod','prodhead'].includes(t);
+  return ['prochead','batchhead','batchprod','prodhead'].includes(t);
 }
 
 // ── 수량 필드 통일 ──────────────────────────────────────────
@@ -343,12 +343,16 @@ function gBuildProcess(filtered, dates) {
       const eqKey = 'procMode_' + proc + '_' + eq;
       if (typeof ganttExpandState[eqKey] === 'undefined') ganttExpandState[eqKey] = false;
 
-      // ▶ equip(호기) — summary, bars 없음
+      // ▶ equip(호기) — child S/N bar collection preview
+      const eqChildBars = eqItems.map(function(it) {
+        return gMakeBar(it.sn, it.d, proc, dates);
+      }).filter(Boolean);
+      console.log('[DEBUG][equip]', eq, '→ childBars:', eqChildBars.length, '/ items:', eqItems.length);
       rows.push({
         type: 'equip', key: eqKey, label: eq,
         count: eqItems.length, qty: eqQty, proc,
         expanded: ganttExpandState[eqKey],
-        isSummary: true, bars: []
+        isSummary: false, bars: eqChildBars, isPreview: true
       });
 
       if (!ganttExpandState[eqKey]) return;
@@ -366,12 +370,16 @@ function gBuildProcess(filtered, dates) {
         const pKey = eqKey + '_prod_' + pname;
         if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
 
-        // ▶ procProd(제품) — summary, bars 없음, 수량 표시
+        // ▶ procProd(제품) — child S/N bar collection preview
+        const prodChildBars = pitems.map(function(it) {
+          return gMakeBar(it.sn, it.d, proc, dates);
+        }).filter(Boolean);
+        console.log('[DEBUG][procProd]', pname, '→ childBars:', prodChildBars.length, '/ items:', pitems.length);
         rows.push({
           type: 'procProd', key: pKey, pname: pname,
           count: pitems.length, qty: pQty, proc,
           expanded: ganttExpandState[pKey],
-          isSummary: true, bars: []
+          isSummary: false, bars: prodChildBars, isPreview: true
         });
 
         if (!ganttExpandState[pKey]) return;
@@ -655,19 +663,41 @@ window.renderGantt = function renderGantt() {
       }
     });
 
-    // ── bar 렌더링: gIsSummaryRow 이중보호 ──
-    if (!gIsSummaryRow(r) && Array.isArray(r.bars)) {
+    // ── bar 렌더링 ──
+    // isPreview(호기/제품 집계 preview) → opacity 낮게, height 낮게, delayed x2over 미적용
+    // leaf snLine → 기존 스타일 그대로
+    if (!gIsSummaryRow(r) && Array.isArray(r.bars) && r.bars.length > 0) {
+      const isPreview = r.isPreview === true;
+      const barTop    = isPreview ? Math.floor(G_ROW * 0.28) : 6;
+      const barH      = isPreview ? Math.floor(G_ROW * 0.44) : (G_ROW - 12);
       r.bars.forEach(function(b) {
+        // preview row에서는 x2over(지연 연장선) 사용 안 함
+        const x2use = (isPreview && b.x2over) ? b.x2 : (b.x2over || b.x2);
         const left = b.x1 * ganttCellW;
-        const w = Math.max((b.x2 - b.x1 + 1) * ganttCellW - 2, 4);
-        const style = gBarStyle(b);
-        let label = b.proc || b.bid || '';
-        if (ganttCellW >= 18 && label.length > 0) {
+        const w = Math.max((x2use - b.x1 + 1) * ganttCellW - 2, 4);
+        const clr = G_CLR[b.proc] || '#666';
+        let style;
+        if (isPreview) {
+          // preview: delayed 여부와 무관하게 색상+opacity만, outline 없음
+          if (b.status === '완료') {
+            style = 'background:'+clr+';opacity:0.45;border-radius:3px;background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.15) 3px,rgba(255,255,255,0.15) 6px);';
+          } else if (b.status === '진행') {
+            style = 'background:'+clr+';opacity:0.55;border-radius:3px;';
+          } else {
+            style = 'background:'+clr+';opacity:0.22;border-radius:3px;';
+          }
+        } else {
+          style = gBarStyle(b);
+        }
+        let label = '';
+        if (!isPreview && ganttCellW >= 18) {
+          label = b.proc || b.bid || '';
           const maxCh = Math.floor(w / 7);
-          if (label.length > maxCh) label = label.slice(0, maxCh-1) + '…';
-        } else { label = ''; }
-        const tip = (b.pname||'')+'|'+(b.bid||'')+'|'+b.proc+'|'+b.s+'~'+b.e+'|'+b.status+(b.delayed?' | 지연 '+b.delayDays+'일':'');
-        bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:6px;height:'+(G_ROW-12)+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:8px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
+          if (label.length > maxCh) label = label.slice(0, maxCh - 1) + '…';
+        }
+        const tip = (b.sn ? b.sn+'|' : '')+(b.pname||'')+'|'+b.proc+'|'+b.s+'~'+b.e+'|'+b.status+(b.delayed&&!isPreview?' | 지연 '+b.delayDays+'일':'');
+        const hover = isPreview ? '' : " onmouseover=\"this.style.transform='scale(1.04)'\" onmouseout=\"this.style.transform='scale(1)'\"";
+        bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:'+barTop+'px;height:'+barH+'px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:8px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:default;pointer-events:auto"'+hover+'>';
         bH += label + '</div>';
       });
     }
@@ -716,4 +746,5 @@ window.renderGantt = function renderGantt() {
 
   setTimeout(function(){ window.ganttGoToday(); }, 100);
 };
+
 
