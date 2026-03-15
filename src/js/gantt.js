@@ -456,7 +456,7 @@ function gBuildBatch(filtered, dates) {
     Object.keys(prods).sort().forEach(function(pname) {
       const items = prods[pname];
       const pKey = bKey + '_' + pname;
-      if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+      if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = true;
       const pQty = items.reduce(function(s,it){ return s + resolveQty(it.d); }, 0);
 
       // ▶ batchProd — child SN bar collection preview
@@ -707,7 +707,7 @@ window.renderGantt = function renderGantt() {
         const x2use = (isPreview && b.x2over) ? b.x2 : (b.x2over || b.x2);
         const left = b.x1 * ganttCellW;
         const w = Math.max((x2use - b.x1 + 1) * ganttCellW - 2, 4);
-        const clr = G_CLR[b.proc] || '#666';
+        const clr = G_CLR[b.proc] || (b.bid ? gBatchColor(b.bid) : '#3b82f6');
         let style;
         if (isPreview) {
           // preview: delayed 여부와 무관하게 색상+opacity만, outline 없음
@@ -778,6 +778,7 @@ window.renderGantt = function renderGantt() {
 
   setTimeout(function(){ window.ganttGoToday(); }, 100);
 };
+
 
 
 
