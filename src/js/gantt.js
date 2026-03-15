@@ -1,11 +1,11 @@
 ﻿// =============================================
-// ESC Manager - gantt.js v2.1 (fix: getFiltered, EQ_MAP, normalizeFurnace)
+// ESC Manager - gantt.js v3.0
+// summary row bar 완전 제거 + gIsSummaryRow 이중보호
 // =============================================
 
 import * as S from './state.js';
 import { PROC_COLORS, PROC_ORDER, EQ_MAP } from './constants.js';
 
-// EQ_MAP 글로벌 노출 (window.EQ_MAP 참조 안전화)
 window.EQ_MAP = EQ_MAP;
 
 let ganttViewMode2 = 'process';
@@ -35,7 +35,27 @@ function gBatchColor(bid) {
   return G_BATCH_MAP[bid];
 }
 
-// --- 로컬 안전 날짜 파서 ---
+// ── summary row 판별 (이중보호용) ──────────────────────────
+function gIsSummaryRow(r) {
+  if (!r) return false;
+  if (r.isSummary === true) return true;
+  const t = String(r.type || '').trim().toLowerCase();
+  return ['prochead','equip','procprod','batchhead','batchprod','prodhead'].includes(t);
+}
+
+// ── 수량 필드 통일 ──────────────────────────────────────────
+function resolveQty(d) {
+  if (!d) return 1;
+  return Number(
+    d.qty !== undefined ? d.qty :
+    d.quantity !== undefined ? d.quantity :
+    d.sheetQty !== undefined ? d.sheetQty :
+    d.amount !== undefined ? d.amount :
+    d.count !== undefined ? d.count : 1
+  ) || 1;
+}
+
+// ── 로컬 안전 날짜 파서 ────────────────────────────────────
 function parseLocalDate(dateStr) {
   if (!dateStr) return null;
   const s = String(dateStr).trim().slice(0, 10);
@@ -100,6 +120,7 @@ function gDateRange(filtered) {
   return arr;
 }
 
+// ── UI 컨트롤 ──────────────────────────────────────────────
 window.setGanttView = function(mode, btn) {
   ganttViewMode2 = mode;
   ganttExpandState = {};
@@ -139,7 +160,7 @@ function toggleG(key) {
 }
 window.toggleG = toggleG;
 
-// --- 설비명 정규화 ---
+// ── 설비명 정규화 ──────────────────────────────────────────
 function normalizeFurnaceName(raw) {
   const v = String(raw || '').trim();
   if (!v) return '미배정';
@@ -150,7 +171,6 @@ function normalizeFurnaceName(raw) {
   return v;
 }
 
-// --- 설비 정렬 ---
 function sortEquipAll(list) {
   return list.slice().sort(function(a, b) {
     const SPECIAL = { '외주': 990, '미배정': 999 };
@@ -165,10 +185,10 @@ function sortEquipAll(list) {
   });
 }
 
+// ── bar 생성 (leaf row 전용) ───────────────────────────────
 function gMakeBar(sn, d, proc, dates) {
   const p = (window.getProc ? window.getProc(d, proc) : null) || {};
   const fD = window.fD || function(v){ return ''; };
-  // 실제 데이터 필드: startDate(시작), actualEnd(실제종료), planEnd(예정종료)
   let s = fD(p.actualStart) || fD(p.planStart) || fD(p.startDate);
   const eAct = fD(p.actualEnd);
   const ePlan = fD(p.planEnd);
@@ -195,6 +215,7 @@ function gMakeBar(sn, d, proc, dates) {
   return bar;
 }
 
+// ── gGetSummaryBars: 함수는 유지하되 summary row에는 사용 안 함 ──
 function gGetSummaryBars(items, procList, dates) {
   const bars = [];
   const dFirst = dates[0], dLast = dates[dates.length - 1];
@@ -237,7 +258,6 @@ function gGetSummaryBars(items, procList, dates) {
 function gBarStyle(bar) {
   const clr = G_CLR[bar.proc] || '#666';
   if (bar.delayed) {
-    // 지연: 공정 색 유지하되 빨간 테두리로만 표시
     return 'background:'+clr+';opacity:0.9;outline:2px solid #ef4444;outline-offset:-2px;';
   }
   if (bar.status === '완료') {
@@ -249,39 +269,41 @@ function gBarStyle(bar) {
   }
 }
 
+// ══════════════════════════════════════════════════════════
+// gBuildProcess: 공정 > 호기 > 제품 > S/N
+// summary row(procHead/equip/procProd) → isSummary:true, bars:[]
+// leaf row(snLine) → gMakeBar 결과만
+// ══════════════════════════════════════════════════════════
 function gBuildProcess(filtered, dates) {
   const rows = [];
-  const eqMapRef = EQ_MAP;
+  const EXCLUDED = ['완료','complete','completed','폐기','discard','폐기완료'];
 
   G_PROCS.forEach(function(proc) {
-    // ── currentProcess 기준 필터: 현재 해당 공정 진행중인 item만 ──
     const procItems = [];
     Object.keys(filtered).forEach(function(sn) {
       const d = filtered[sn];
+      const st = String(d.status || '').trim().toLowerCase();
+      if (EXCLUDED.includes(st)) return;
       const cur = String(d.currentProcess || '').trim();
       const route = window.getRoute(sn, d);
-      // currentProcess가 있으면 일치 여부로, 없으면 route 포함 여부로 fallback
       const match = cur ? (cur === proc) : (route.indexOf(proc) >= 0);
       if (match) procItems.push({ sn, d });
     });
 
-    const totalQty = procItems.reduce(function(s, it) {
-      return s + (Number(it.d.qty || it.d.quantity || it.d.sheetQty || 1));
-    }, 0);
+    const totalQty = procItems.reduce(function(s, it) { return s + resolveQty(it.d); }, 0);
+    console.log('[공정뷰]', proc, ':', procItems.length, '건 /', totalQty, '매');
 
-    console.log('[공정뷰]', proc, '현재공정 item:', procItems.length, '건 /', totalQty, '매');
-
+    // ▶ procHead — summary, bars 없음
     rows.push({
       type: 'procHead', proc, color: G_CLR[proc],
       count: procItems.length, qty: totalQty,
-      bars: gGetSummaryBars(procItems, [proc], dates)
+      isSummary: true, bars: []
     });
 
-    // 호기 그룹
     const equipMap = {};
     let equipAll = [];
-    if (eqMapRef[proc] && Array.isArray(eqMapRef[proc])) {
-      eqMapRef[proc].forEach(function(eq) {
+    if (EQ_MAP[proc] && Array.isArray(EQ_MAP[proc])) {
+      EQ_MAP[proc].forEach(function(eq) {
         const n = normalizeFurnaceName(eq);
         if (equipAll.indexOf(n) < 0) { equipAll.push(n); equipMap[n] = []; }
       });
@@ -296,61 +318,71 @@ function gBuildProcess(filtered, dates) {
     equipAll = sortEquipAll(equipAll);
 
     if (proc === '소성') {
-      console.log('[공정뷰] 소성 설비 그룹:', equipAll);
+      const dist = {};
+      equipAll.forEach(function(eq){ dist[eq] = (equipMap[eq]||[]).length; });
+      console.log('[공정뷰] 소성 설비분포:', JSON.stringify(dist));
     }
 
     equipAll.forEach(function(eq) {
       const eqItems = equipMap[eq] || [];
-      const eqQty = eqItems.reduce(function(s, it) {
-        return s + (Number(it.d.qty || it.d.quantity || it.d.sheetQty || 1));
-      }, 0);
+      const eqQty = eqItems.reduce(function(s, it) { return s + resolveQty(it.d); }, 0);
       const eqKey = 'procMode_' + proc + '_' + eq;
       if (typeof ganttExpandState[eqKey] === 'undefined') ganttExpandState[eqKey] = false;
 
+      // ▶ equip(호기) — summary, bars 없음
       rows.push({
         type: 'equip', key: eqKey, label: eq,
         count: eqItems.length, qty: eqQty, proc,
         expanded: ganttExpandState[eqKey],
-        bars: gGetSummaryBars(eqItems, [proc], dates)
+        isSummary: true, bars: []
       });
 
-      if (ganttExpandState[eqKey]) {
-        // 호기 > 제품 그룹
-        const prodMap = {};
-        eqItems.forEach(function(it) {
-          const pname = it.d.productName || '?';
-          if (!prodMap[pname]) prodMap[pname] = [];
-          prodMap[pname].push(it);
+      if (!ganttExpandState[eqKey]) return;
+
+      const prodMap = {};
+      eqItems.forEach(function(it) {
+        const pname = it.d.productName || '?';
+        if (!prodMap[pname]) prodMap[pname] = [];
+        prodMap[pname].push(it);
+      });
+
+      Object.keys(prodMap).sort().forEach(function(pname) {
+        const pitems = prodMap[pname];
+        const pQty = pitems.reduce(function(s, it) { return s + resolveQty(it.d); }, 0);
+        const pKey = eqKey + '_prod_' + pname;
+        if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+
+        // ▶ procProd(제품) — summary, bars 없음, 수량 표시
+        rows.push({
+          type: 'procProd', key: pKey, pname: pname,
+          count: pitems.length, qty: pQty, proc,
+          expanded: ganttExpandState[pKey],
+          isSummary: true, bars: []
         });
 
-        Object.keys(prodMap).sort().forEach(function(pname) {
-          const pitems = prodMap[pname];
-          const pQty = pitems.reduce(function(s, it) {
-            return s + (Number(it.d.qty || it.d.quantity || it.d.sheetQty || 1));
-          }, 0);
-          const pKey = eqKey + '_prod_' + pname;
-          if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+        if (!ganttExpandState[pKey]) return;
 
+        // ▶ snLine — leaf row, bar 있음
+        pitems.forEach(function(it) {
+          const bar = gMakeBar(it.sn, it.d, proc, dates);
           rows.push({
-            type: 'procProd', key: pKey, pname: pname,
-            count: pitems.length, qty: pQty, proc,
-            expanded: ganttExpandState[pKey],
-            bars: gGetSummaryBars(pitems, [proc], dates)
+            type: 'snLine', sn: it.sn,
+            isSummary: false,
+            bars: bar ? [bar] : [],
+            depth: 3
           });
-
-          if (ganttExpandState[pKey]) {
-            pitems.forEach(function(it) {
-              const bar = gMakeBar(it.sn, it.d, proc, dates);
-              rows.push({ type: 'snLine', sn: it.sn, bars: bar ? [bar] : [], depth: 3 });
-            });
-          }
         });
-      }
+      });
     });
   });
   return rows;
 }
 
+// ══════════════════════════════════════════════════════════
+// gBuildBatch: 배치 > 제품 > S/N
+// batchHead/batchProd → isSummary:true, bars:[]
+// snLine → leaf, bar 있음
+// ══════════════════════════════════════════════════════════
 function gBuildBatch(filtered, dates) {
   const rows = [];
   const batchMap = {};
@@ -370,41 +402,58 @@ function gBuildBatch(filtered, dates) {
 
     let batchItems = [];
     Object.keys(prods).forEach(function(p){ batchItems = batchItems.concat(prods[p]); });
+    const bQty = batchItems.reduce(function(s,it){ return s + resolveQty(it.d); }, 0);
 
-    rows.push({ type:'batchHead', key:bKey, bid, count:batchItems.length,
-      expanded:ganttExpandState[bKey], color:gBatchColor(bid), bars: gGetSummaryBars(batchItems, G_PROCS_EXT, dates) });
+    // ▶ batchHead — summary, bars 없음
+    rows.push({
+      type: 'batchHead', key: bKey, bid,
+      count: bQty, expanded: ganttExpandState[bKey],
+      color: gBatchColor(bid),
+      isSummary: true, bars: []
+    });
 
-    if (ganttExpandState[bKey]) {
-      Object.keys(prods).sort().forEach(function(pname) {
-        const items = prods[pname];
-        const pKey = bKey + '_' + pname;
-        if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+    if (!ganttExpandState[bKey]) return;
 
-        rows.push({ type:'batchProd', key:pKey, pname, count:items.length,
-          bars:gGetSummaryBars(items, G_PROCS_EXT, dates), bid, expanded:ganttExpandState[pKey] });
+    Object.keys(prods).sort().forEach(function(pname) {
+      const items = prods[pname];
+      const pKey = bKey + '_' + pname;
+      if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+      const pQty = items.reduce(function(s,it){ return s + resolveQty(it.d); }, 0);
 
-        if (ganttExpandState[pKey]) {
-          items.forEach(function(it) {
-            // 배치별 뷰: 현재 공정 bar 우선, 없으면 전공정 중 날짜 있는 것
-            const cur = it.d.currentProcess;
-            const route = window.getRoute(it.sn, it.d);
-            let bars = [];
-            if (cur) {
-              const b = gMakeBar(it.sn, it.d, cur, dates);
-              if (b) bars = [b];
-            }
-            if (!bars.length) {
-              bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
-            }
-            rows.push({ type:'snLine', sn:it.sn, bars, depth:2 });
-          });
-        }
+      // ▶ batchProd — summary, bars 없음
+      rows.push({
+        type: 'batchProd', key: pKey, pname,
+        count: pQty, bid,
+        expanded: ganttExpandState[pKey],
+        isSummary: true, bars: []
       });
-    }
+
+      if (!ganttExpandState[pKey]) return;
+
+      // ▶ snLine — leaf, bar 있음
+      items.forEach(function(it) {
+        const cur = it.d.currentProcess;
+        const route = window.getRoute(it.sn, it.d);
+        let bars = [];
+        if (cur) {
+          const b = gMakeBar(it.sn, it.d, cur, dates);
+          if (b) bars = [b];
+        }
+        if (!bars.length) {
+          bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+        }
+        rows.push({ type: 'snLine', sn: it.sn, isSummary: false, bars, depth: 2 });
+      });
+    });
   });
   return rows;
 }
 
+// ══════════════════════════════════════════════════════════
+// gBuildProduct: 제품 > S/N
+// prodHead → isSummary:true, bars:[]
+// snLine → leaf, bar 있음
+// ══════════════════════════════════════════════════════════
 function gBuildProduct(filtered, dates) {
   const rows = [];
   const prodMap = {};
@@ -419,34 +468,42 @@ function gBuildProduct(filtered, dates) {
     const items = prodMap[pname];
     const pKey = 'prod_' + pname;
     if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = true;
+    const pQty = items.reduce(function(s,it){ return s + resolveQty(it.d); }, 0);
 
-    rows.push({ type:'prodHead', key:pKey, pname, count:items.length,
-      expanded:ganttExpandState[pKey], bars: gGetSummaryBars(items, G_PROCS_EXT, dates) });
+    // ▶ prodHead — summary, bars 없음
+    rows.push({
+      type: 'prodHead', key: pKey, pname,
+      count: pQty, expanded: ganttExpandState[pKey],
+      isSummary: true, bars: []
+    });
 
-    if (ganttExpandState[pKey]) {
-      items.forEach(function(it) {
-        // 제품별 뷰: 현재 공정 bar 우선, 없으면 전공정 bars
-        const cur = it.d.currentProcess;
-        const route = window.getRoute(it.sn, it.d);
-        let bars = [];
-        if (cur) {
-          const b = gMakeBar(it.sn, it.d, cur, dates);
-          if (b) bars = [b];
-        }
-        if (!bars.length) {
-          bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
-        }
-        rows.push({ type:'snLine', sn:it.sn, bars, depth:1 });
-      });
-    }
+    if (!ganttExpandState[pKey]) return;
+
+    // ▶ snLine — leaf, bar 있음
+    items.forEach(function(it) {
+      const cur = it.d.currentProcess;
+      const route = window.getRoute(it.sn, it.d);
+      let bars = [];
+      if (cur) {
+        const b = gMakeBar(it.sn, it.d, cur, dates);
+        if (b) bars = [b];
+      }
+      if (!bars.length) {
+        bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+      }
+      rows.push({ type: 'snLine', sn: it.sn, isSummary: false, bars, depth: 1 });
+    });
   });
   return rows;
 }
 
+// ══════════════════════════════════════════════════════════
+// renderGantt
+// ══════════════════════════════════════════════════════════
 window.renderGantt = function renderGantt() {
   const filtered = window.getFiltered ? window.getFiltered() : {};
   const cnt = Object.keys(filtered).length;
-  console.log('[간트 디버그] getFiltered 결과:', cnt, '건 / 전체:', Object.keys(S.DATA || {}).length, '건');
+  console.log('[간트] getFiltered:', cnt, '건 / 전체:', Object.keys(S.DATA || {}).length, '건');
 
   if (cnt === 0) {
     const el = document.getElementById('ganttContent');
@@ -469,7 +526,7 @@ window.renderGantt = function renderGantt() {
   const totalW = dates.length * ganttCellW;
   const escFn = window.esc || function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
 
-  // 헤더 HTML
+  // ── 헤더 ──
   let hH = '';
   hH += '<div style="display:flex;height:'+G_HEAD+'px;border-bottom:1px solid var(--border)">';
   let curM = '', mStart = 0;
@@ -495,16 +552,27 @@ window.renderGantt = function renderGantt() {
   });
   hH += '</div>';
 
-  // 사이드바 + 바디 HTML
+  // ── 사이드바 + 바디 ──
   let sbH = '', bH = '';
   rows.forEach(function(r) {
+
+    // 사이드바 렌더
     if (r.type === 'procHead') {
-      const procQtyBadge = r.qty > 0
-        ? ' <span style="font-size:11px;font-weight:400;color:var(--t2);margin-left:6px">'+r.qty+'매</span>'
-        : '';
+      const badge = r.qty > 0 ? ' <span style="font-size:11px;font-weight:400;color:var(--t2);margin-left:6px">'+r.qty+'매</span>' : '';
       sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;border-top:2px solid var(--border);background:var(--bg1);font-weight:700;font-size:13px;gap:6px">';
       sbH += '<span style="color:'+r.color+';font-size:16px">&#9679;</span>';
-      sbH += escFn(r.proc) + procQtyBadge + '</div>';
+      sbH += escFn(r.proc) + badge + '</div>';
+
+    } else if (r.type === 'equip') {
+      const arrow = r.expanded ? '&#9660;' : '&#9654;';
+      const qBadge = r.qty > 0
+        ? '<span style="margin-left:auto;background:var(--bg3);padding:1px 6px;border-radius:8px;font-size:10px;color:var(--t2)">'+r.qty+'매</span>'
+        : '<span style="margin-left:auto;font-size:10px;color:var(--t3)">&mdash;</span>';
+      sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 20px;cursor:pointer;font-size:12px;gap:4px;border-bottom:1px solid var(--border);background:var(--bg2)">';
+      sbH += '<span style="font-size:9px;color:var(--t3);width:12px">'+arrow+'</span>';
+      sbH += '<span style="color:'+G_CLR[r.proc]+';font-size:10px">&#9632;</span> ';
+      sbH += escFn(r.label) + qBadge + '</div>';
+
     } else if (r.type === 'procProd') {
       const arrow = r.expanded ? '&#9660;' : '&#9654;';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 40px;cursor:pointer;font-size:11px;gap:4px;border-bottom:1px solid var(--border);background:var(--bg3)">';
@@ -512,31 +580,25 @@ window.renderGantt = function renderGantt() {
       sbH += '<span style="color:'+G_CLR[r.proc]+';font-size:9px">&#9632;</span> ';
       sbH += escFn(r.pname);
       sbH += ' <span style="margin-left:auto;font-size:10px;color:var(--t2)">'+r.qty+'매</span></div>';
-    } else if (r.type === 'equip') {
-      const arrow = r.expanded ? '&#9660;' : '&#9654;';
-      const qtyLabel = r.qty > 0 ? r.qty+'매' : (r.count > 0 ? r.count+'건' : '');
-      const countBadge = qtyLabel
-        ? '<span style="margin-left:auto;background:var(--bg3);padding:1px 6px;border-radius:8px;font-size:10px;color:var(--t2)">'+qtyLabel+'</span>'
-        : '<span style="margin-left:auto;font-size:10px;color:var(--t3)">&mdash;</span>';
-      sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 20px;cursor:pointer;font-size:12px;gap:4px;border-bottom:1px solid var(--border);background:var(--bg2)">';
-      sbH += '<span style="font-size:9px;color:var(--t3);width:12px">'+arrow+'</span>';
-      sbH += '<span style="color:'+G_CLR[r.proc]+';font-size:10px">&#9632;</span> ';
-      sbH += escFn(r.label) + countBadge + '</div>';
+
     } else if (r.type === 'snLine') {
       const pad = (r.depth || 1) * 20;
       sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 '+pad+'px;font-size:10px;gap:4px;border-bottom:1px solid var(--border);color:var(--t2)">';
       sbH += escFn(r.sn) + '</div>';
+
     } else if (r.type === 'batchHead') {
       const arrow = r.expanded ? '&#9660;' : '&#9654;';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;cursor:pointer;font-weight:600;font-size:12px;gap:6px;border-top:2px solid var(--border);background:var(--bg1)">';
       sbH += '<span style="font-size:9px;color:var(--t3)">'+arrow+'</span>';
       sbH += '<span style="width:10px;height:10px;border-radius:3px;background:'+r.color+';flex-shrink:0"></span>';
       sbH += escFn(r.bid) + ' <span style="color:var(--t2);font-weight:400;font-size:10px;margin-left:auto">'+r.count+'매</span></div>';
+
     } else if (r.type === 'batchProd') {
       const arrow = r.expanded ? '&#9660;' : '&#9654;';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;gap:4px;border-bottom:1px solid var(--border);cursor:pointer">';
       sbH += '<span style="font-size:8px;color:var(--t3);width:10px">'+arrow+'</span>';
       sbH += escFn(r.pname) + ' <span style="color:var(--t3);font-size:10px">('+r.count+'매)</span></div>';
+
     } else if (r.type === 'prodHead') {
       const arrow = r.expanded ? '&#9660;' : '&#9654;';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;cursor:pointer;font-weight:600;font-size:12px;gap:6px;border-top:2px solid var(--border);background:var(--bg1)">';
@@ -544,6 +606,7 @@ window.renderGantt = function renderGantt() {
       sbH += escFn(r.pname) + ' <span style="color:var(--t2);font-weight:400;font-size:10px;margin-left:auto">'+r.count+'매</span></div>';
     }
 
+    // 바디 배경
     let rowBg = '';
     if (r.type === 'procHead') rowBg = 'background:var(--bg1);border-top:2px solid var(--border);';
     else if (r.type === 'equip' || r.type === 'batchProd') rowBg = 'background:var(--bg2);';
@@ -551,37 +614,37 @@ window.renderGantt = function renderGantt() {
     else if (r.type === 'batchHead' || r.type === 'prodHead') rowBg = 'background:var(--bg1);border-top:2px solid var(--border);';
 
     bH += '<div style="position:relative;height:'+G_ROW+'px;width:'+totalW+'px;'+rowBg+'border-bottom:1px solid var(--border)">';
+
+    // 주말 음영
     dates.forEach(function(dt, idx) {
-      const dtDate = parseLocalDate(dt);
-      const day = dtDate ? dtDate.getDay() : 0;
-      if (day === 0 || day === 6) {
+      const day = parseLocalDate(dt);
+      const d = day ? day.getDay() : 0;
+      if (d === 0 || d === 6) {
         bH += '<div style="position:absolute;left:'+(idx*ganttCellW)+'px;top:0;width:'+ganttCellW+'px;height:100%;background:rgba(128,128,128,0.06)"></div>';
       }
     });
 
-    const bars = r.bars || [];
-    bars.forEach(function(b) {
-      const left = b.x1 * ganttCellW;
-      const w = Math.max((b.x2 - b.x1 + 1) * ganttCellW - 2, 4);
-      const style = gBarStyle(b);
-      let label = b.proc || b.bid || '';
-      const pIdx = G_PROCS_EXT.indexOf(b.proc);
-      const h = b.isSummary ? 6 : G_ROW - 12;
-      const top = b.isSummary ? 4 + ((pIdx < 0 ? 0 : pIdx) * 4) : 6;
-      if (ganttCellW >= 18 && label.length > 0) {
-        const maxCh = Math.floor(w / 7);
-        if (label.length > maxCh) {
-          label = b.isSummary ? '' : label.slice(0, maxCh-1) + '…';
-        }
-      } else { label = ''; }
-      const tip = (b.pname||'')+'|'+(b.bid||'')+'|'+b.proc+'|'+b.s+'~'+b.e+'|'+b.status+(b.delayed?' | 지연 '+b.delayDays+'일':'');
-      bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:'+top+'px;height:'+h+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:8px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
-      bH += label + '</div>';
-      // delayed overlay 제거 - gBarStyle에서 테두리로 표시
-    });
+    // ── bar 렌더링: gIsSummaryRow 이중보호 ──
+    if (!gIsSummaryRow(r) && Array.isArray(r.bars)) {
+      r.bars.forEach(function(b) {
+        const left = b.x1 * ganttCellW;
+        const w = Math.max((b.x2 - b.x1 + 1) * ganttCellW - 2, 4);
+        const style = gBarStyle(b);
+        let label = b.proc || b.bid || '';
+        if (ganttCellW >= 18 && label.length > 0) {
+          const maxCh = Math.floor(w / 7);
+          if (label.length > maxCh) label = label.slice(0, maxCh-1) + '…';
+        } else { label = ''; }
+        const tip = (b.pname||'')+'|'+(b.bid||'')+'|'+b.proc+'|'+b.s+'~'+b.e+'|'+b.status+(b.delayed?' | 지연 '+b.delayDays+'일':'');
+        bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:6px;height:'+(G_ROW-12)+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:8px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
+        bH += label + '</div>';
+      });
+    }
+
     bH += '</div>';
   });
 
+  // 오늘 선
   let todayLine = '';
   if (todayIdx >= 0) {
     const tx = todayIdx * ganttCellW + Math.floor(ganttCellW / 2);
