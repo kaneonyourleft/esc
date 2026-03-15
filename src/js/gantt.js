@@ -253,87 +253,97 @@ function gBuildProcess(filtered, dates) {
   const rows = [];
   const eqMapRef = EQ_MAP;
 
-  // 디버그: 소성 누락 추적
-  const sinteringDebug = [];
-  Object.keys(filtered).forEach(function(sn) {
-    const d = filtered[sn];
-    const route = window.getRoute ? window.getRoute(sn, d) : [];
-    if (route.indexOf('소성') >= 0) {
-      const p = window.getProc ? window.getProc(d, '소성') : {};
-      sinteringDebug.push({
-        sn, status: d.status, currentProcess: d.currentProcess,
-        equip_raw: p.equip || '(없음)',
-        equip_norm: normalizeFurnaceName(p.equip),
-        planStart: p.planStart, actualStart: p.actualStart
-      });
-    }
-  });
-  if (sinteringDebug.length > 0) {
-    console.log('[간트 디버그] 소성 items:', sinteringDebug.length, '건');
-    console.table(sinteringDebug);
-  }
-
   G_PROCS.forEach(function(proc) {
+    // ── currentProcess 기준 필터: 현재 해당 공정 진행중인 item만 ──
     const procItems = [];
     Object.keys(filtered).forEach(function(sn) {
       const d = filtered[sn];
+      const cur = String(d.currentProcess || '').trim();
       const route = window.getRoute(sn, d);
-      if (route.indexOf(proc) >= 0) procItems.push({ sn, d });
+      // currentProcess가 있으면 일치 여부로, 없으면 route 포함 여부로 fallback
+      const match = cur ? (cur === proc) : (route.indexOf(proc) >= 0);
+      if (match) procItems.push({ sn, d });
     });
 
-    rows.push({ type:'procHead', proc, color:G_CLR[proc], bars: gGetSummaryBars(procItems, G_PROCS_EXT, dates) });
+    const totalQty = procItems.reduce(function(s, it) {
+      return s + (Number(it.d.qty || it.d.quantity || it.d.sheetQty || 1));
+    }, 0);
 
+    console.log('[공정뷰]', proc, '현재공정 item:', procItems.length, '건 /', totalQty, '매');
+
+    rows.push({
+      type: 'procHead', proc, color: G_CLR[proc],
+      count: procItems.length, qty: totalQty,
+      bars: gGetSummaryBars(procItems, [proc], dates)
+    });
+
+    // 호기 그룹
     const equipMap = {};
     let equipAll = [];
-
-    // 1단계: EQ_MAP 기준 그룹 생성
     if (eqMapRef[proc] && Array.isArray(eqMapRef[proc])) {
       eqMapRef[proc].forEach(function(eq) {
-        const normalized = normalizeFurnaceName(eq);
-        if (equipAll.indexOf(normalized) < 0) {
-          equipAll.push(normalized);
-          equipMap[normalized] = [];
-        }
+        const n = normalizeFurnaceName(eq);
+        if (equipAll.indexOf(n) < 0) { equipAll.push(n); equipMap[n] = []; }
       });
     }
-
-    // 2단계: 실제 데이터 매핑 (정규화 후)
     procItems.forEach(function(it) {
       const p = window.getProc(it.d, proc);
       const eq = normalizeFurnaceName(p.equip || '미배정');
-      if (!equipMap[eq]) {
-        equipMap[eq] = [];
-        if (equipAll.indexOf(eq) < 0) equipAll.push(eq);
-      }
+      if (!equipMap[eq]) { equipMap[eq] = []; if (equipAll.indexOf(eq) < 0) equipAll.push(eq); }
       equipMap[eq].push(it);
     });
-
-    // 3단계: 아이템 있는 그룹만 표시
-    equipAll = equipAll.filter(function(eq) {
-      return equipMap[eq] && equipMap[eq].length > 0;
-    });
-
-    // 4단계: 정렬
+    equipAll = equipAll.filter(function(eq) { return equipMap[eq] && equipMap[eq].length > 0; });
     equipAll = sortEquipAll(equipAll);
 
-    if (proc === '소성' && equipAll.length > 0) {
-      console.log('[간트 디버그] 소성 설비 그룹:', equipAll);
+    if (proc === '소성') {
+      console.log('[공정뷰] 소성 설비 그룹:', equipAll);
     }
 
     equipAll.forEach(function(eq) {
-      const items = equipMap[eq] || [];
+      const eqItems = equipMap[eq] || [];
+      const eqQty = eqItems.reduce(function(s, it) {
+        return s + (Number(it.d.qty || it.d.quantity || it.d.sheetQty || 1));
+      }, 0);
       const eqKey = 'procMode_' + proc + '_' + eq;
       if (typeof ganttExpandState[eqKey] === 'undefined') ganttExpandState[eqKey] = false;
 
-      rows.push({ type:'equip', key:eqKey, label:eq, count:items.length, proc,
-        expanded:ganttExpandState[eqKey], bars: gGetSummaryBars(items, G_PROCS_EXT, dates) });
+      rows.push({
+        type: 'equip', key: eqKey, label: eq,
+        count: eqItems.length, qty: eqQty, proc,
+        expanded: ganttExpandState[eqKey],
+        bars: gGetSummaryBars(eqItems, [proc], dates)
+      });
 
       if (ganttExpandState[eqKey]) {
-        items.forEach(function(it) {
-          // 공정별 뷰: 해당 공정(proc) bar만 표시
-          const bar = gMakeBar(it.sn, it.d, proc, dates);
-          const bars = bar ? [bar] : [];
-          rows.push({ type:'snLine', sn:it.sn, bars, depth:2 });
+        // 호기 > 제품 그룹
+        const prodMap = {};
+        eqItems.forEach(function(it) {
+          const pname = it.d.productName || '?';
+          if (!prodMap[pname]) prodMap[pname] = [];
+          prodMap[pname].push(it);
+        });
+
+        Object.keys(prodMap).sort().forEach(function(pname) {
+          const pitems = prodMap[pname];
+          const pQty = pitems.reduce(function(s, it) {
+            return s + (Number(it.d.qty || it.d.quantity || it.d.sheetQty || 1));
+          }, 0);
+          const pKey = eqKey + '_prod_' + pname;
+          if (typeof ganttExpandState[pKey] === 'undefined') ganttExpandState[pKey] = false;
+
+          rows.push({
+            type: 'procProd', key: pKey, pname: pname,
+            count: pitems.length, qty: pQty, proc,
+            expanded: ganttExpandState[pKey],
+            bars: gGetSummaryBars(pitems, [proc], dates)
+          });
+
+          if (ganttExpandState[pKey]) {
+            pitems.forEach(function(it) {
+              const bar = gMakeBar(it.sn, it.d, proc, dates);
+              rows.push({ type: 'snLine', sn: it.sn, bars: bar ? [bar] : [], depth: 3 });
+            });
+          }
         });
       }
     });
@@ -489,13 +499,24 @@ window.renderGantt = function renderGantt() {
   let sbH = '', bH = '';
   rows.forEach(function(r) {
     if (r.type === 'procHead') {
+      const procQtyBadge = r.qty > 0
+        ? ' <span style="font-size:11px;font-weight:400;color:var(--t2);margin-left:6px">'+r.qty+'매</span>'
+        : '';
       sbH += '<div style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px;border-top:2px solid var(--border);background:var(--bg1);font-weight:700;font-size:13px;gap:6px">';
       sbH += '<span style="color:'+r.color+';font-size:16px">&#9679;</span>';
-      sbH += escFn(r.proc) + '</div>';
+      sbH += escFn(r.proc) + procQtyBadge + '</div>';
+    } else if (r.type === 'procProd') {
+      const arrow = r.expanded ? '&#9660;' : '&#9654;';
+      sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 40px;cursor:pointer;font-size:11px;gap:4px;border-bottom:1px solid var(--border);background:var(--bg3)">';
+      sbH += '<span style="font-size:8px;color:var(--t3);width:10px">'+arrow+'</span>';
+      sbH += '<span style="color:'+G_CLR[r.proc]+';font-size:9px">&#9632;</span> ';
+      sbH += escFn(r.pname);
+      sbH += ' <span style="margin-left:auto;font-size:10px;color:var(--t2)">'+r.qty+'매</span></div>';
     } else if (r.type === 'equip') {
       const arrow = r.expanded ? '&#9660;' : '&#9654;';
-      const countBadge = r.count > 0
-        ? '<span style="margin-left:auto;background:var(--bg3);padding:1px 6px;border-radius:8px;font-size:10px;color:var(--t2)">'+r.count+'</span>'
+      const qtyLabel = r.qty > 0 ? r.qty+'매' : (r.count > 0 ? r.count+'건' : '');
+      const countBadge = qtyLabel
+        ? '<span style="margin-left:auto;background:var(--bg3);padding:1px 6px;border-radius:8px;font-size:10px;color:var(--t2)">'+qtyLabel+'</span>'
         : '<span style="margin-left:auto;font-size:10px;color:var(--t3)">&mdash;</span>';
       sbH += '<div onclick="window.toggleG(\''+r.key+'\')" style="height:'+G_ROW+'px;display:flex;align-items:center;padding:0 8px 0 20px;cursor:pointer;font-size:12px;gap:4px;border-bottom:1px solid var(--border);background:var(--bg2)">';
       sbH += '<span style="font-size:9px;color:var(--t3);width:12px">'+arrow+'</span>';
@@ -526,6 +547,7 @@ window.renderGantt = function renderGantt() {
     let rowBg = '';
     if (r.type === 'procHead') rowBg = 'background:var(--bg1);border-top:2px solid var(--border);';
     else if (r.type === 'equip' || r.type === 'batchProd') rowBg = 'background:var(--bg2);';
+    else if (r.type === 'procProd') rowBg = 'background:var(--bg3);';
     else if (r.type === 'batchHead' || r.type === 'prodHead') rowBg = 'background:var(--bg1);border-top:2px solid var(--border);';
 
     bH += '<div style="position:relative;height:'+G_ROW+'px;width:'+totalW+'px;'+rowBg+'border-bottom:1px solid var(--border)">';
