@@ -236,6 +236,10 @@ function gGetSummaryBars(items, procList, dates) {
 
 function gBarStyle(bar) {
   const clr = G_CLR[bar.proc] || '#666';
+  if (bar.delayed) {
+    // 지연: 공정 색 유지하되 빨간 테두리로만 표시
+    return 'background:'+clr+';opacity:0.9;outline:2px solid #ef4444;outline-offset:-2px;';
+  }
   if (bar.status === '완료') {
     return 'background:'+clr+';opacity:0.85;background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.15) 3px,rgba(255,255,255,0.15) 6px);';
   } else if (bar.status === '진행') {
@@ -326,8 +330,9 @@ function gBuildProcess(filtered, dates) {
 
       if (ganttExpandState[eqKey]) {
         items.forEach(function(it) {
-          const route = window.getRoute(it.sn, it.d);
-          const bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+          // 공정별 뷰: 해당 공정(proc) bar만 표시
+          const bar = gMakeBar(it.sn, it.d, proc, dates);
+          const bars = bar ? [bar] : [];
           rows.push({ type:'snLine', sn:it.sn, bars, depth:2 });
         });
       }
@@ -370,8 +375,17 @@ function gBuildBatch(filtered, dates) {
 
         if (ganttExpandState[pKey]) {
           items.forEach(function(it) {
+            // 배치별 뷰: 현재 공정 bar 우선, 없으면 전공정 중 날짜 있는 것
+            const cur = it.d.currentProcess;
             const route = window.getRoute(it.sn, it.d);
-            const bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+            let bars = [];
+            if (cur) {
+              const b = gMakeBar(it.sn, it.d, cur, dates);
+              if (b) bars = [b];
+            }
+            if (!bars.length) {
+              bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+            }
             rows.push({ type:'snLine', sn:it.sn, bars, depth:2 });
           });
         }
@@ -401,8 +415,17 @@ function gBuildProduct(filtered, dates) {
 
     if (ganttExpandState[pKey]) {
       items.forEach(function(it) {
+        // 제품별 뷰: 현재 공정 bar 우선, 없으면 전공정 bars
+        const cur = it.d.currentProcess;
         const route = window.getRoute(it.sn, it.d);
-        const bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+        let bars = [];
+        if (cur) {
+          const b = gMakeBar(it.sn, it.d, cur, dates);
+          if (b) bars = [b];
+        }
+        if (!bars.length) {
+          bars = route.map(function(p){ return gMakeBar(it.sn, it.d, p, dates); }).filter(Boolean);
+        }
         rows.push({ type:'snLine', sn:it.sn, bars, depth:1 });
       });
     }
@@ -532,11 +555,7 @@ window.renderGantt = function renderGantt() {
       const tip = (b.pname||'')+'|'+(b.bid||'')+'|'+b.proc+'|'+b.s+'~'+b.e+'|'+b.status+(b.delayed?' | 지연 '+b.delayDays+'일':'');
       bH += '<div title="'+tip+'" style="position:absolute;left:'+left+'px;top:'+top+'px;height:'+h+'px;border-radius:4px;'+style+'display:flex;align-items:center;justify-content:center;width:'+w+'px;font-size:8px;color:#fff;font-weight:500;overflow:hidden;white-space:nowrap;cursor:pointer;transition:transform 0.1s" onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">';
       bH += label + '</div>';
-      if (b.delayed && b.x2over) {
-        const dLeft = (b.x2 + 1) * ganttCellW;
-        const dW = (b.x2over - b.x2) * ganttCellW;
-        bH += '<div style="position:absolute;left:'+dLeft+'px;top:'+top+'px;height:'+h+'px;border-radius:0 4px 4px 0;background:#ef4444;opacity:0.7;width:'+dW+'px"></div>';
-      }
+      // delayed overlay 제거 - gBarStyle에서 테두리로 표시
     });
     bH += '</div>';
   });
