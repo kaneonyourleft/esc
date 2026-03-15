@@ -179,6 +179,7 @@ function gMakeBar(sn, d, proc, dates) {
   const todayStr = toDateStr(normalizeDate(new Date()));
   let x1 = dates.indexOf(s);
   let x2 = dates.indexOf(e);
+  if (x1 < 0 && x2 < 0) return null;
   if (x1 < 0) x1 = 0;
   if (x2 < 0) x2 = dates.length - 1;
   if (x2 < x1) x2 = x1;
@@ -411,7 +412,7 @@ function gBuildProduct(filtered, dates) {
 window.renderGantt = function renderGantt() {
   const filtered = window.getFiltered ? window.getFiltered() : {};
   const cnt = Object.keys(filtered).length;
-  console.log('[간트 디버그] getFiltered 결과:', cnt, '건 / 전체:', Object.keys(window._S_DATA || {}).length, '건');
+  console.log('[간트 디버그] getFiltered 결과:', cnt, '건 / 전체:', Object.keys(S.DATA || {}).length, '건');
 
   if (cnt === 0) {
     const el = document.getElementById('ganttContent');
