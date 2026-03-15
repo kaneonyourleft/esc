@@ -343,7 +343,7 @@ function gBuildProcess(filtered, dates) {
       });
       console.log('[DEBUG][EQUIP_DIST][' + proc + ']', JSON.stringify(dbgDist));
     }
-    equipAll = equipAll.filter(function(eq) { return equipMap[eq] && equipMap[eq].length > 0; });
+    // equipAll = equipAll.filter(function(eq) { return equipMap[eq] && equipMap[eq].length > 0; });
     equipAll = sortEquipAll(equipAll);
 
     if (proc === '소성') {
@@ -481,7 +481,7 @@ function gBuildBatch(filtered, dates) {
         type: 'batchProd', key: pKey, pname,
         count: pQty, bid,
         expanded: ganttExpandState[pKey],
-        isSummary: false, bars: bpChildBars, isPreview: false
+        isSummary: false, bars: bpChildBars, isPreview: true
       });
 
       if (!ganttExpandState[pKey]) return;
