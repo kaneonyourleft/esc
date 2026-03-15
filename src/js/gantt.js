@@ -4,6 +4,10 @@
 // =============================================
 
 import * as S from './state.js';
+import { getRoute as _getRoute, getProc as _getProc, fD as _fD } from './utils.js';
+window.getRoute = window.getRoute || _getRoute;
+window.getProc  = window.getProc  || _getProc;
+window.fD       = window.fD       || _fD;
 import { PROC_COLORS, PROC_ORDER, EQ_MAP } from './constants.js';
 
 window.EQ_MAP = EQ_MAP;
@@ -187,6 +191,7 @@ function sortEquipAll(list) {
 
 // ── bar 생성 (leaf row 전용) ───────────────────────────────
 function gMakeBar(sn, d, proc, dates) {
+  console.log('[DEBUG][gMakeBar][IN]', { sn: sn, proc: proc });
   const p = (window.getProc ? window.getProc(d, proc) : null) || {};
   const fD = window.fD || function(v){ return ''; };
   let s = fD(p.actualStart) || fD(p.planStart) || fD(p.startDate);
@@ -212,6 +217,7 @@ function gMakeBar(sn, d, proc, dates) {
     const todayIdx = dates.indexOf(todayStr);
     if (todayIdx > x2) bar.x2over = todayIdx;
   }
+  console.log('[DEBUG][gMakeBar][OUT]', { sn: sn, proc: proc, result: bar ? 'BAR_OK' : 'BAR_NULL', bar: bar });
   return bar;
 }
 
@@ -285,9 +291,17 @@ function gBuildProcess(filtered, dates) {
       const st = String(d.status || '').trim().toLowerCase();
       if (EXCLUDED.includes(st)) return;
       const cur = String(d.currentProcess || '').trim();
-      const route = window.getRoute(sn, d);
-      const match = cur ? (cur === proc) : (route.indexOf(proc) >= 0);
-      if (match) procItems.push({ sn, d });
+      if (cur) {
+        if (cur !== proc) return;
+      } else {
+        const route = window.getRoute(sn, d);
+        const firstActive = route.find(function (rp) {
+          const ps = String((window.getProc(d, rp) || {}).status || '대기');
+          return ps !== '완료';
+        });
+        if (!firstActive || firstActive !== proc) return;
+      }
+      procItems.push({ sn, d });
     });
 
     const totalQty = procItems.reduce(function(s, it) { return s + resolveQty(it.d); }, 0);
@@ -375,6 +389,8 @@ function gBuildProcess(filtered, dates) {
       });
     });
   });
+  console.log('[DEBUG][ROWS][process] count=', rows.length);
+  console.table(rows.slice(0, 150).map(function (r) { return { type: r.type, label: r.label || r.pname || r.proc || r.bid || r.sn || '', isSummary: r.isSummary, bars: Array.isArray(r.bars) ? r.bars.length : 'none', qty: r.qty }; }));
   return rows;
 }
 
@@ -446,6 +462,8 @@ function gBuildBatch(filtered, dates) {
       });
     });
   });
+  console.log('[DEBUG][ROWS][batch] count=', rows.length);
+  console.table(rows.slice(0, 150).map(function (r) { return { type: r.type, label: r.label || r.pname || r.proc || r.bid || r.sn || '', isSummary: r.isSummary, bars: Array.isArray(r.bars) ? r.bars.length : 'none', qty: r.qty }; }));
   return rows;
 }
 
@@ -501,7 +519,20 @@ function gBuildProduct(filtered, dates) {
 // renderGantt
 // ══════════════════════════════════════════════════════════
 window.renderGantt = function renderGantt() {
-  const filtered = window.getFiltered ? window.getFiltered() : {};
+  const filtered = (function () {
+    if (typeof window.getFiltered === 'function') return window.getFiltered();
+    const raw = (S && S.DATA) ? S.DATA : {};
+    const prodF = (document.getElementById('ganttProdFilter') || {}).value || '';
+    const statF = (document.getElementById('ganttStatusFilter') || {}).value || '';
+    const out = {};
+    Object.keys(raw).forEach(function (sn) {
+      const d = raw[sn];
+      if (prodF && (d.productName || '') !== prodF) return;
+      if (statF && (d.status || '') !== statF) return;
+      out[sn] = d;
+    });
+    return out;
+  })();
   const cnt = Object.keys(filtered).length;
   console.log('[간트] getFiltered:', cnt, '건 / 전체:', Object.keys(S.DATA || {}).length, '건');
 
@@ -685,3 +716,4 @@ window.renderGantt = function renderGantt() {
 
   setTimeout(function(){ window.ganttGoToday(); }, 100);
 };
+
