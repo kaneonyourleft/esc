@@ -90,9 +90,9 @@ function gDateRange(filtered) {
     mxD.setDate(mxD.getDate() + 23);
   }
   const dsStart = normalizeDate(mnD);
-  dsStart.setDate(dsStart.getDate() - 7);
+  dsStart.setDate(dsStart.getDate() - 60);
   const dsEnd = normalizeDate(mxD);
-  dsEnd.setDate(dsEnd.getDate() + 14);
+  dsEnd.setDate(dsEnd.getDate() + 60);
   const arr = [];
   for (let c = new Date(dsStart); c <= dsEnd; c.setDate(c.getDate() + 1)) {
     arr.push(toDateStr(normalizeDate(c)));

@@ -1696,6 +1696,9 @@ window.getFiltered = function getFiltered() {
     if (isExcludedStatus(d.status)) return;
     if (fProd && (d.productName || '') !== fProd) return;
     if (fStatus && (d.status || '대기') !== fStatus) return;
+    const procs = d.processes && typeof d.processes === 'object' ? Object.values(d.processes) : [];
+    const hasDate = procs.some(p => p && (p.planStart || p.actualStart || p.planEnd || p.actualEnd));
+    if (!hasDate) return;
     result[sn] = d;
   });
   console.log('[간트 필터] getFiltered:', Object.keys(result).length, '건 / 전체:', Object.keys(S.DATA).length, '건');
