@@ -4,19 +4,126 @@
    ============================================================ */
 import * as S from './state.js';
 import { PROC_ORDER } from './constants.js';
-import { fD } from './utils.js';
+import { fD, mdToHtml } from './utils.js';
 import { handleFirestoreError, toast } from './app-utils.js';
 import { buildContext, parseCommand } from './ai-context.js';
-import { updateEquip, saveSNBatch } from './main.js';
+import { updateEquip } from './main.js';
 
 // ===================================================
 // Gemini API 호출
 // ===================================================
 async function callGemini(apiKey, question) {
-  // ... (기존 callGemini 코드 유지)
+  const systemCtx = buildContext();
+  const prompt = `당신은 "ESC Manager AI"입니다 — 세라믹 정전척(ESC) 생산 공장의 전문 AI 어시스턴트입니다.
+
+## 역할
+- 실시간 생산 데이터를 분석하여 정확한 답변을 제공합니다
+- 지연 원인 분석, 병목 진단, 생산 효율 개선을 제안합니다
+- 공정 전문 용어(탈지, 소성, 환원소성, 평탄화, 도금, 열처리)를 정확히 사용합니다
+- 설비(1호기~18호기, 외주, GB)와 제품 카테고리(BL, DC, HL 등)를 이해합니다
+
+## 응답 규칙
+1. 한국어로 답변 (기술 용어는 그대로 사용)
+2. 숫자/통계는 볼드(**) 처리
+3. 테이블이 필요하면 마크다운 테이블 사용
+4. 핵심 정보 먼저, 상세 설명 나중에
+5. 개선 제안은 구체적 + 실행 가능해야 함
+6. 데이터에 없는 내용은 추측하지 말고 "데이터 확인 필요"라고 답변
+
+## 현재 실시간 데이터
+${systemCtx}
+
+## 사용자 질문
+${question}`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    }
+  );
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    throw new Error(errJson.error?.message || `API 오류 (${res.status})`);
+  }
+  const json = await res.json();
+  return json.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 생성할 수 없습니다.';
 }
 
-// ... (mdToHtml, escHtml, generateLocalAI, addTypingIndicator 등 기존 코드 유지)
+// ===================================================
+// 로컬 AI (API 키 없을 때 또는 실패 시)
+// ===================================================
+function generateLocalAI(msg) {
+  const q = msg.toLowerCase();
+
+  if (q.includes('요약') || q.includes('현황')) {
+    const ctx = buildContext();
+    return `**📊 생산 현황 요약**\n\n${ctx}`;
+  }
+
+  if (q.includes('지연')) {
+    const delayed = Object.entries(S.DATA).filter(([, d]) => (d.status || '대기') === '지연');
+    if (!delayed.length) return '현재 지연된 LOT이 없습니다. ✅';
+    let r = `**⚠️ 지연 현황 (${delayed.length}건)**\n\n`;
+    delayed.forEach(([sn, d]) => {
+      r += `- **${sn}** — ${d.currentProcess || '-'} / 납기: ${fD(d.endDate)}\n`;
+    });
+    return r;
+  }
+
+  if (q.includes('설비') || q.includes('가동')) {
+    const equipUsage = {};
+    Object.entries(S.DATA).forEach(([sn, d]) => {
+      if (d.status !== '진행') return;
+      const proc = d.currentProcess;
+      if (!proc) return;
+      const pd = d.processes?.[proc];
+      const eq = pd?.equip;
+      if (eq) {
+        if (!equipUsage[eq]) equipUsage[eq] = [];
+        equipUsage[eq].push(sn);
+      }
+    });
+    if (!Object.keys(equipUsage).length) return '현재 가동 중인 설비가 없습니다.';
+    let r = `**🔧 설비 가동 현황**\n\n`;
+    Object.entries(equipUsage).sort((a, b) => b[1].length - a[1].length).forEach(([eq, sns]) => {
+      r += `- **${eq}**: ${sns.length}건 가동중 (${sns.slice(0, 3).join(', ')}${sns.length > 3 ? '...' : ''})\n`;
+    });
+    return r;
+  }
+
+  if (q.includes('공정') || q.includes('파이프')) {
+    let r = `**⚙️ 공정별 현황**\n\n`;
+    PROC_ORDER.forEach(proc => {
+      const items = Object.entries(S.DATA).filter(([sn, d]) => {
+        return d.currentProcess === proc && (d.status === '진행' || d.status === '대기');
+      });
+      r += `- **${proc}**: ${items.length}건\n`;
+    });
+    return r;
+  }
+
+  if (q.includes('개선') || q.includes('제안')) {
+    return `**💡 생산 효율 개선 제안**\n\n1. 지연 LOT 우선 처리 — 병목 공정의 설비 추가 투입 검토\n2. 공정간 대기시간 최소화 — 이전 공정 완료 즉시 다음 공정 시작\n3. 설비 가동률 모니터링 — 유휴 설비 재배치\n4. 불량률 높은 공정 집중 관리 — 원인 분석 및 예방 조치\n5. 납기 역산 기준 투입 계획 수립`;
+  }
+
+  return `"${msg}"에 대한 분석입니다.\n\n**사용 가능한 명령:**\n- 현황 요약\n- 지연 현황\n- 설비 가동 현황\n- 공정별 현황\n- 개선 제안`;
+}
+
+// ===================================================
+// 타이핑 인디케이터
+// ===================================================
+function addTypingIndicator(container) {
+  const div = document.createElement('div');
+  div.className = 'chat-bubble ai';
+  div.id = 'ai-typing';
+  div.innerHTML = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
 
 // ===================================================
 // 명령 실행 핸들러
@@ -25,16 +132,12 @@ async function executeAiCommand(parsed) {
   try {
     if (parsed.action === 'create_sn') {
       const { product, qty, date } = parsed.data;
-      // S.PRODUCTS에서 입력받은 제품명이 포함된 실제 ID 찾기
       const prodId = Object.keys(S.PRODUCTS).find(id => 
         id.toUpperCase().includes(product.toUpperCase())
       ) || product;
 
-      // 시트 번호는 오늘 날짜 YYMMDD 기본값
       const now = new Date();
       const sheet = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-      
-      // 배치 코드는 자동 생성 (오늘날짜-001 형식)
       const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-`;
       let maxSeq = 0;
       Object.values(S.DATA).forEach(d => {
@@ -45,30 +148,6 @@ async function executeAiCommand(parsed) {
       });
       const batchCode = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
 
-      // saveSNBatch 호출을 위해 DOM 요소들에 값 임시 설정 (main.js 로직 재활용)
-      // 실제로는 API 기반으로 리팩토링하는 것이 좋으나, 현재 main.js 구조에 맞춤
-      const options = {
-        sn_batch: batchCode,
-        sn_sheet: sheet,
-        sn_prod: prodId,
-        sn_qty: qty,
-        sn_seq: 1, // 기본 1번부터
-        sn_start: date,
-        sn_proc: PROC_ORDER[0]
-      };
-
-      // main.js의 saveSNBatch가 DOM에서 값을 읽으므로 수동으로 데이터 구성하여 전달하는 방식으로 우회하거나 
-      // main.js의 saveSNBatch를 수정해야 함. 여기서는 데이터 기반으로 동작하도록 main.js를 참고하여 구현
-      
-      // 임시: main.js의 saveSNBatch를 직접 호출하는 대신 필요한 로직만 수행하도록 구현 가능하나
-      // 여기서는 main.js의 saveSNBatch가 export되어 있으므로 이를 활용하기 위해 DOM 조작 최소화 시도
-      
-      // [!] 실제 구현 시 main.js의 saveSNBatch가 파라미터를 받도록 수정되었음을 가정 (or 래퍼 생성)
-      // 현재 main.js의 saveSNBatch는 DOM에서 직접 읽음.
-      // TODO: main.js의 saveSNBatch를 데이터 기반으로 리팩토링 필요. 
-      // 일단은 에러 방지를 위해 간단한 알림으로 대체하거나 DOM에 값을 세팅하고 호출.
-      
-      // DOM 세팅 (임시 방편)
       const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
       setVal('sn_batch', batchCode);
       setVal('sn_sheet', sheet);
@@ -76,17 +155,18 @@ async function executeAiCommand(parsed) {
       setVal('sn_qty', qty);
       setVal('sn_start', date);
       
-      await window.saveSNBatch();
-      return `✅ **${product}** 제품 **${qty}**개 투입을 완료했습니다.\n- 배치: ${batchCode}\n- 시작일: ${date}`;
+      if (typeof window.saveSNBatch === 'function') {
+        await window.saveSNBatch();
+        return `✅ **${product}** 제품 **${qty}**개 투입을 완료했습니다.\n- 배치: ${batchCode}\n- 시작일: ${date}`;
+      } else {
+        throw new Error('시스템 함수(saveSNBatch)를 찾을 수 없습니다.');
+      }
     }
 
     if (parsed.action === 'proc_change') {
       const { sn, proc, status } = parsed.data;
-      // updateEquip(sn, proc, '자동배정'); 
-      // 실제로는 상태 변경 로직이 필요함 (main.js의 updateProcStartDate 등 활용)
-      // 여기서는 간단히 설비 미지정 상태로 공정 시작 처리
       await updateEquip(sn, proc, 'AI 자동처리');
-      return `✅ **${sn}** LOT의 **${proc}** 공정을 **${status}** 처리했습니다.`;
+      return `✅ **${sn}** LOT의 **${proc}** 공정을 **${status}** 처리했습니다. (설비: AI 자동처리)`;
     }
   } catch (err) {
     console.error('AI Command Error:', err);
@@ -133,7 +213,7 @@ function showCommandConfirm(container, parsed, onConfirm) {
 window.askAI = function(question) {
   const input = document.getElementById('chatInput');
   if (input) input.value = question;
-  sendChat();
+  window.sendChat();
 };
 
 window.sendChat = async function() {
@@ -145,25 +225,23 @@ window.sendChat = async function() {
   const container = document.getElementById('chatMessages');
   if (!container) return;
 
-  // 사용자 메시지 추가
   const userDiv = document.createElement('div');
   userDiv.className = 'chat-bubble user';
   userDiv.textContent = msg;
   container.appendChild(userDiv);
   container.scrollTop = container.scrollHeight;
 
-  // 명령 파싱
   const parsed = parseCommand(msg);
+  const apiKey = localStorage.getItem('esc_gemini_key');
+  const hasKey = apiKey && apiKey.length > 10;
+  
+  // 1. 분석/현황 질문
   if (parsed && parsed.action === 'analysis') {
-    // 분석 명령은 바로 실행
     const typingEl = addTypingIndicator(container);
-    await new Promise(r => setTimeout(r, 500));
-    typingEl.remove();
-
-    const apiKey = localStorage.getItem('esc_gemini_key');
-    if (apiKey) {
+    if (hasKey) {
       try {
         const response = await callGemini(apiKey, msg);
+        typingEl.remove();
         const div = document.createElement('div');
         div.className = 'chat-bubble ai';
         div.innerHTML = mdToHtml(response);
@@ -172,24 +250,32 @@ window.sendChat = async function() {
         return;
       } catch (e) {
         console.warn('Gemini error:', e);
+        typingEl.remove();
+        const div = document.createElement('div');
+        div.className = 'chat-bubble ai';
+        div.innerHTML = mdToHtml(generateLocalAI(msg)) + 
+          `<div style="font-size:11px;color:var(--err);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">⚠️ Gemini API 호출 실패: ${e.message}</div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        return;
       }
     }
+    // 키 없음
+    typingEl.remove();
     const div = document.createElement('div');
     div.className = 'chat-bubble ai';
-    div.innerHTML = mdToHtml(generateLocalAI(msg));
+    div.innerHTML = mdToHtml(generateLocalAI(msg)) + 
+      `<div style="font-size:11px;color:var(--t3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">💡 현재 로컬 분석 모드입니다. 더 정확한 AI 분석을 원하시면 **설정 → Gemini API Key**를 등록해 주세요.</div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
     return;
   }
 
+  // 2. 실행형 명령
   if (parsed && parsed.action !== 'analysis' && parsed.data) {
-    // 실행형 명령 감지 시 확인 UI 표시
     showCommandConfirm(container, parsed, async (p) => {
       const typingEl = addTypingIndicator(container);
-      
-      // 실제 명령 실행
       const result = await executeAiCommand(p);
-      
       typingEl.remove();
       const div = document.createElement('div');
       div.className = 'chat-bubble ai';
@@ -200,11 +286,9 @@ window.sendChat = async function() {
     return;
   }
 
-  // 일반 질문 → Gemini or 로컬
+  // 3. 일반 질문
   const typingEl = addTypingIndicator(container);
-
-  const apiKey = localStorage.getItem('esc_gemini_key');
-  if (apiKey) {
+  if (hasKey) {
     try {
       const response = await callGemini(apiKey, msg);
       typingEl.remove();
@@ -215,32 +299,27 @@ window.sendChat = async function() {
       container.scrollTop = container.scrollHeight;
       return;
     } catch (e) {
-      console.warn('Gemini error:', e);
       typingEl.remove();
-      const errDiv = document.createElement('div');
-      errDiv.className = 'chat-bubble ai';
-      errDiv.innerHTML = mdToHtml(generateLocalAI(msg)) +
-        `<div style="font-size:11px;color:var(--t2);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">` +
-        `⚠️ Gemini 연결 실패 (${e.message}) — 로컬 분석 결과입니다</div>`;
-      container.appendChild(errDiv);
+      const div = document.createElement('div');
+      div.className = 'chat-bubble ai';
+      div.innerHTML = mdToHtml(generateLocalAI(msg)) + 
+        `<div style="font-size:11px;color:var(--err);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">⚠️ Gemini 연결 실패: ${e.message}</div>`;
+      container.appendChild(div);
       container.scrollTop = container.scrollHeight;
       return;
     }
   }
 
-  // API 키 없으면 로컬 AI
+  // 로컬 AI 폴백
   await new Promise(r => setTimeout(r, 600));
   typingEl.remove();
   const div = document.createElement('div');
   div.className = 'chat-bubble ai';
   div.innerHTML = mdToHtml(generateLocalAI(msg)) +
-    `<div style="font-size:11px;color:var(--t3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">` +
-    `💡 Gemini API 키를 등록하면 더 정확한 AI 분석을 받을 수 있습니다.</div>`;
+    `<div style="font-size:11px;color:var(--t3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">💡 Gemini API 키를 등록하면 더 정확한 AI 분석을 받을 수 있습니다.</div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 };
-
-// ... (sendMiniChat 등 나머지 코드 유지)
 
 // ===================================================
 // 미니챗 연동
@@ -262,14 +341,17 @@ window.sendMiniChat = async function() {
   container.scrollTop = container.scrollHeight;
 
   const typingEl = addTypingIndicator(container);
-
   const apiKey = localStorage.getItem('esc_gemini_key');
+  const hasKey = apiKey && apiKey.length > 10;
   let response;
-  if (apiKey) {
+  let errorMsg = '';
+
+  if (hasKey) {
     try {
       response = await callGemini(apiKey, msg);
     } catch (e) {
       response = generateLocalAI(msg);
+      errorMsg = e.message;
     }
   } else {
     await new Promise(r => setTimeout(r, 400));
@@ -280,7 +362,9 @@ window.sendMiniChat = async function() {
   const div = document.createElement('div');
   div.className = 'chat-bubble ai';
   div.style.fontSize = '12px';
-  div.innerHTML = mdToHtml(response);
+  div.innerHTML = mdToHtml(response) + 
+    (errorMsg ? `<div style="font-size:10px;color:var(--err);margin-top:4px">⚠️ API 오류: ${errorMsg}</div>` : 
+    (!hasKey ? `<div style="font-size:10px;color:var(--t3);margin-top:4px">💡 API 키 미등록</div>` : ''));
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 };
